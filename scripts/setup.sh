@@ -40,17 +40,19 @@ header "MONAI Medical Imaging Platform — Setup"
 # error message if any prerequisite is missing.
 header "Checking system requirements"
 
-# NVIDIA driver
-if ! command -v nvidia-smi &>/dev/null; then
-    error "nvidia-smi not found. Install NVIDIA driver ≥ 570 for Blackwell GPU support."
+# NVIDIA driver — only required in GPU mode (MOONAI_DEVICE, see docker/.env)
+source "${PROJECT_ROOT}/scripts/lib/compute-device.sh"
+if [ "$MOONAI_DEVICE_RESOLVED" = cpu ]; then
+    warn "CPU mode: no NVIDIA GPU used (MOONAI_DEVICE=cpu, or none found). Skipping GPU checks."
+else
+    DRIVER_VER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1)
+    info "NVIDIA driver: $DRIVER_VER"
+    MAJOR=$(echo "$DRIVER_VER" | cut -d. -f1)
+    if [ "$MAJOR" -lt 570 ]; then
+        error "NVIDIA driver $DRIVER_VER < 570. Blackwell GPUs require driver ≥ 570. Please upgrade."
+    fi
+    ok "NVIDIA driver $DRIVER_VER — OK (≥ 570)"
 fi
-DRIVER_VER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1)
-info "NVIDIA driver: $DRIVER_VER"
-MAJOR=$(echo "$DRIVER_VER" | cut -d. -f1)
-if [ "$MAJOR" -lt 570 ]; then
-    error "NVIDIA driver $DRIVER_VER < 570. Blackwell GPUs require driver ≥ 570. Please upgrade."
-fi
-ok "NVIDIA driver $DRIVER_VER — OK (≥ 570)"
 
 # Docker
 if ! command -v docker &>/dev/null; then
@@ -66,7 +68,7 @@ DC=$(command -v docker-compose 2>/dev/null || echo "docker compose")
 ok "Docker Compose $(${DC} version --short 2>/dev/null || ${DC} version 2>/dev/null | head -1)"
 
 # NVIDIA Container Toolkit
-if ! docker info 2>/dev/null | grep -q "Runtimes.*nvidia\|nvidia.*Runtimes"; then
+if [ "$MOONAI_DEVICE_RESOLVED" = gpu ] && ! docker info 2>/dev/null | grep -q "Runtimes.*nvidia\|nvidia.*Runtimes"; then
     warn "NVIDIA Container Toolkit may not be installed."
     warn "Install with:"
     warn "  curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmour -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg"

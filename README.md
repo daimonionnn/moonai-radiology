@@ -66,26 +66,25 @@ cp docker/.env.example docker/.env     # then edit values (see below)
 ./scripts/inference/run-inference.sh --model wholeBody_ct_segmentation --image datasets/ct/<series>
 ```
 
-## Running without a GPU (CPU fallback)
+## Running without a GPU (CPU mode)
 
-If your GPU is unavailable, use the CPU compose file. Inference still works —
-PyTorch/MONAI fall back to CPU automatically — it is just slower (minutes for CT
-organ models, tens of minutes for the large brain transformer):
+Set the compute device in `docker/.env`:
 
-```bash
-docker compose -f docker/docker-compose.cpu.yml --env-file docker/.env up -d
-docker compose -f docker/docker-compose.cpu.yml logs -f monailabel
-# then run inference exactly as above:
-./scripts/inference/run-inference.sh --model wholeBody_ct_segmentation --image datasets/ct/<series>
+```ini
+MOONAI_DEVICE=auto   # gpu if an NVIDIA GPU + Docker NVIDIA runtime are found, else cpu
+# MOONAI_DEVICE=cpu  # force CPU (no NVIDIA driver/toolkit needed)
+# MOONAI_DEVICE=gpu  # force GPU
 ```
 
-Notes:
-- **Vulkan / Intel iGPU are not usable** for these models — PyTorch has no
-  production Vulkan/oneAPI path for 3D medical networks. CPU is the fallback.
-- For a no-build CPU test you can swap the custom image for the stock
-  `projectmonai/monailabel:latest` (see comments in the CPU compose file).
-- The LLM report step is unaffected by the missing GPU — it runs on your
-  separate LLM server.
+`setup.sh`, `start.sh`, `restart.sh` and `logs.sh` then pick `docker/docker-compose.yml`
+or `docker/docker-compose.cpu.yml` automatically, and TotalSegmentator / vesselFM run on
+the same device. Everything works on CPU, just slower — on the reference host the
+`wholeBody_ct_segmentation` inference took 50 s on CPU vs 2 s on the GPU; large models
+(brain transformer) take tens of minutes. One-off override: `MOONAI_DEVICE=cpu ./scripts/start.sh`.
+
+In CPU mode `pancreas_ct_dints_segmentation` is skipped: the bundle hard-codes a CUDA
+device and would otherwise stop MONAI Label from starting. The LLM report step is not
+affected — it runs on whatever server `LLM_BASE_URL` points to.
 
 ## Configuration
 

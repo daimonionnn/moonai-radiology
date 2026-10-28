@@ -34,7 +34,8 @@ info()  { echo -e "${CYAN}[INFO]${NC}  $*"; }
 ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 error() { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 
-IMAGE_PATH=""; EXTRA=(); DEVICE="gpu"
+source "${PROJECT_ROOT}/scripts/lib/compute-device.sh"
+IMAGE_PATH=""; EXTRA=(); DEVICE="$MOONAI_DEVICE_RESOLVED"   # override with --device
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --image)  IMAGE_PATH="$2"; shift 2 ;;

@@ -16,7 +16,7 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DOCKER_DIR="${PROJECT_ROOT}/docker"
-COMPOSE_FILE="${DOCKER_DIR}/docker-compose.yml"
+source "${PROJECT_ROOT}/scripts/lib/compute-device.sh"   # sets COMPOSE_FILE (GPU or CPU compose)
 ENV_FILE="${DOCKER_DIR}/.env"
 
 SERVICE=""

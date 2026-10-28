@@ -102,7 +102,10 @@ fi
 
 # ── 2. TotalSegmentator (full 'total' task, one multi-label file) ─
 info "TotalSegmentator (total, multi-label)..."
-"$TSBIN" -i "${RUN_DIR}/arterial.nii.gz" -o "${RUN_DIR}/ts_total" --ml -q
+source "${PROJECT_ROOT}/scripts/lib/compute-device.sh"
+VFM_DEVICE=cuda:0; [ "$MOONAI_DEVICE_RESOLVED" = cpu ] && VFM_DEVICE=cpu
+info "Device: ${MOONAI_DEVICE_RESOLVED}"
+"$TSBIN" -i "${RUN_DIR}/arterial.nii.gz" -o "${RUN_DIR}/ts_total" --ml -q --device "$MOONAI_DEVICE_RESOLVED"
 
 # ── 3. ROI + vesselFM input ───────────────────────────────────
 info "Kidney/aorta summary and ROI crop:"
@@ -113,7 +116,7 @@ if [ "$SKIP_VFM" -eq 0 ]; then
     info "vesselFM vessel segmentation (weights download on first run)..."
     ( cd "$VESSELFM_DIR" && PYTHONPATH="$VESSELFM_DIR" "${VESSELFM_VENV}/bin/python" \
         vesselfm/seg/inference.py image_path="${RUN_DIR}/vfm_in" output_folder="${RUN_DIR}/vfm_out" \
-        ckpt_path=null 'tta.scales=[0.5,1,1.5]' post.apply=true hydra.run.dir="${RUN_DIR}/vfm_logs" \
+        ckpt_path=null device="$VFM_DEVICE" 'tta.scales=[0.5,1,1.5]' post.apply=true hydra.run.dir="${RUN_DIR}/vfm_logs" \
         > "${RUN_DIR}/vesselfm.log" 2>&1 ) || error "vesselFM failed — see ${RUN_DIR}/vesselfm.log"
 
     # ── 5. Post-processing ────────────────────────────────────

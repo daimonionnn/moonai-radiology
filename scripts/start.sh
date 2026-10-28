@@ -21,7 +21,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DOCKER_DIR="${PROJECT_ROOT}/docker"
 ENV_FILE="${DOCKER_DIR}/.env"
-COMPOSE_FILE="${DOCKER_DIR}/docker-compose.yml"
+source "${PROJECT_ROOT}/scripts/lib/compute-device.sh"   # sets COMPOSE_FILE (GPU or CPU compose)
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
@@ -87,6 +87,12 @@ else
 fi
 
 CD_ARGS="-f ${COMPOSE_FILE} --env-file ${ENV_FILE}"
+moonai_filter_models_for_cpu
+if [ "$MOONAI_DEVICE_RESOLVED" = cpu ]; then
+    warn "Running on CPU (MOONAI_DEVICE in docker/.env, or no NVIDIA GPU found) — inference is much slower."
+else
+    info "Running on NVIDIA GPU."
+fi
 
 if [ -n "$SERVICE" ]; then
     info "Starting single service: $SERVICE"

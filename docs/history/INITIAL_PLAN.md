@@ -205,5 +205,3 @@ Triton: fully enabled — NGC login required during setup; model export helper s
 3D Slicer on host (not Docker) — GUI requirement; standard supported approach per MONAI Label docs
 Orthanc as DICOM store — open-source, DICOMweb-native, bridges OHIF and MONAI Label
 Does this plan look good to proceed, or would you like to adjust anything (e.g., add Ollama alongside LM Studio, change any port, add more Zoo models, adjust the folder naming)?
-
-Claude Sonnet 4.6 • 1x
