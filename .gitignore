@@ -28,7 +28,8 @@ datasets/nifti/**
 datasets/pathology/**
 datasets/mammography/**
 datasets/xray/**
-datasets/labels/**   # MONAI Label writes masks derived from patient images here
+# MONAI Label writes masks derived from patient images here
+datasets/labels/**
 !datasets/ct/.gitkeep
 !datasets/mri/.gitkeep
 !datasets/nifti/.gitkeep
