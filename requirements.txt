@@ -10,5 +10,6 @@
 pydicom>=2.4        # read DICOM tags (modality, spacing) + series handling
 nibabel>=5.0        # load NIfTI segmentation masks / headers
 numpy>=1.24         # voxel counting / volume math
+scipy>=1.10         # connected components (organ length without stray fragments)
 dicom2nifti>=2.4    # convert DICOM series -> NIfTI on the host (the point-3 fix)
 httpx>=0.24         # optional: nicer HTTP client for report_generator.py (urllib fallback exists)

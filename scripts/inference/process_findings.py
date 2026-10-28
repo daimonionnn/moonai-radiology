@@ -161,8 +161,16 @@ def spleen_length_flag(length_cm: float, sex: str = "") -> str:
 
 
 def craniocaudal_length_cm(mask, affine) -> float:
-    """Extent of a binary mask along the patient's head–feet (RAS S) axis, in cm."""
+    """Extent of a binary mask along the patient's head–feet (RAS S) axis, in cm.
+
+    Uses the largest connected component only: segmentations often contain small
+    detached fragments (on one CT the MONAI spleen mask had two, stretching the
+    length from 10.1 to 15.9 cm and raising a false "enlarged" flag)."""
     import numpy as np
+    from scipy import ndimage as ndi
+    lab, n = ndi.label(mask, structure=np.ones((3, 3, 3)))
+    if n > 1:
+        mask = lab == (np.argmax(np.bincount(lab.ravel())[1:]) + 1)
     idx = np.argwhere(mask)
     if not len(idx):
         return 0.0

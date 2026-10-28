@@ -94,16 +94,53 @@ done
 # LM Studio keeps the LLM weights resident in GPU VRAM even when idle.
 # Before running MONAI Label inference (which also needs GPU VRAM for the
 # segmentation/detection model), we proactively unload the LLM to prevent
-# CUDA out-of-memory errors.  LM Studio will JIT-reload the model when
-# the next /v1/chat/completions request arrives.
+# CUDA out-of-memory errors — only when the LLM server is on this machine.
+# ensure_llm_loaded() reloads it before the report (JIT loading may be off).
 #
 # Flow:
 #   1. Query GET /api/v1/models to discover loaded model instances
 #   2. Parse instance_ids from the JSON response (Python inline)
 #   3. POST /api/v1/models/unload for each instance_id
 #   4. If LM Studio is unreachable, skip gracefully (non-fatal)
+# True when the LLM server runs on this machine (shares our GPU). For a remote
+# server (another PC, e.g. via LAN/Tailscale) unloading it frees nothing here.
+llm_is_local() {
+    local host
+    host=$(echo "$1" | sed -E 's#^[a-z]+://##; s#[:/].*$##')
+    case "$host" in localhost|127.*|::1|0.0.0.0) return 0 ;; esac
+    hostname -I 2>/dev/null | tr ' ' '\n' | grep -qx "$host"
+}
+
+# Make sure LLM_MODEL is loaded before asking for a report. LM Studio's JIT
+# loading may be disabled, and the model may have been unloaded above.
+ensure_llm_loaded() {
+    local llm_url="$1" model="$2" models_json
+    models_json=$(curl -sf --max-time 5 "${llm_url}/api/v1/models" 2>/dev/null) || return 0  # not LM Studio v1
+    if "$PY" - "$models_json" "$model" << 'PYEOF'
+import json, sys
+data, want = json.loads(sys.argv[1]), sys.argv[2]
+loaded = {i.get("id") or i.get("instance_id") for m in data.get("models", [])
+          for i in m.get("loaded_instances", [])} | {m.get("key") for m in data.get("models", []) if m.get("loaded_instances")}
+sys.exit(0 if want in loaded else 1)
+PYEOF
+    then
+        return 0
+    fi
+    info "Loading LLM '${model}' in LM Studio (can take a minute)..."
+    if curl -sf --max-time 600 -X POST "${llm_url}/api/v1/models/load" \
+            -H "Content-Type: application/json" -d "{\"model\":\"${model}\"}" >/dev/null; then
+        ok "LLM loaded: ${model}"
+    else
+        warn "Could not load '${model}' — check LLM_MODEL in docker/.env against ${llm_url}/api/v1/models"
+    fi
+}
+
 unload_llm_vram() {
     local llm_url="$1"
+    if ! llm_is_local "$llm_url"; then
+        info "LLM server ${llm_url} is remote — not unloading it (it does not use this GPU)."
+        return 0
+    fi
 
     # Try v1 API first, fall back to v0 (older LM Studio versions)
     local models_json
@@ -441,7 +478,7 @@ fi
 # The MONAI Label server holds GPU memory for the loaded inference model.
 # If we're about to call the LLM (which also needs VRAM), restart the
 # monailabel container to free GPU memory first.
-if [ "$FREE_VRAM" = true ] && [ "$NO_LLM" = false ]; then
+if [ "$FREE_VRAM" = true ] && [ "$NO_LLM" = false ] && llm_is_local "$LLM_URL"; then
     free_monailabel_vram "$ML_URL" || true
 elif [ "$NO_LLM" = false ]; then
     info "Skipping VRAM release (--no-free-vram)."
@@ -457,6 +494,7 @@ fi
 # and RECOMMENDATION.  Temperature is kept low (0.2) for factual output.
 if [ "$NO_LLM" = false ]; then
     echo ""
+    ensure_llm_loaded "$LLM_URL" "$LLM_MODEL_NAME"
     info "Generating radiology report via LLM at ${LLM_URL} ..."
 
     REPORT=$("$PY" - << PYEOF
@@ -493,13 +531,19 @@ ${CLINICAL_SUMMARY}
 
 Write the radiology report now:"""
 
-    payload = json.dumps({
+    body = {
         "model": "${LLM_MODEL_NAME}",
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": ${LLM_MAX_TOKENS:-2048},
         "temperature": ${LLM_TEMPERATURE:-0.2},
-        "stream": False
-    }).encode("utf-8")
+        "stream": False,
+    }
+    # Thinking models spend tokens on reasoning before the report. The report only
+    # verbalizes numbers computed in code, so reasoning is usually unnecessary:
+    # LLM_REASONING_EFFORT=none switches it off (OpenAI-compatible parameter).
+    if "${LLM_REASONING_EFFORT:-}":
+        body["reasoning_effort"] = "${LLM_REASONING_EFFORT:-}"
+    payload = json.dumps(body).encode("utf-8")
 
     req = urllib.request.Request(
         "${LLM_URL}/v1/chat/completions",
@@ -509,8 +553,17 @@ Write the radiology report now:"""
     )
     with urllib.request.urlopen(req, timeout=${LLM_TIMEOUT:-300}) as resp:
         result = json.load(resp)
-        report = result["choices"][0]["message"]["content"]
-        print(report)
+        choice = result["choices"][0]
+        report = (choice["message"].get("content") or "").strip()
+        if not report:
+            used = (result.get("usage", {}).get("completion_tokens_details") or {}).get("reasoning_tokens")
+            print(f"[LLM] Empty report (finish_reason={choice.get('finish_reason')}, "
+                  f"reasoning_tokens={used}). A thinking model probably used the whole "
+                  f"LLM_MAX_TOKENS on reasoning — set LLM_REASONING_EFFORT=none or raise "
+                  f"LLM_MAX_TOKENS in docker/.env.", file=sys.stderr)
+            print("[Report generation failed — empty LLM response, see warning above]")
+        else:
+            print(report)
 except Exception as e:
     print(f"[LLM] Not available: {e}", file=sys.stderr)
     print("[Report generation skipped — LM Studio may not be running]")

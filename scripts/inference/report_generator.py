@@ -365,13 +365,17 @@ def generate_report(model: str, findings_json: dict[str, Any]) -> str:
 
     print(f"[llm] Calling {LLM_BASE_URL}/v1/chat/completions  model={LLM_MODEL}", flush=True)
 
-    payload = json.dumps({
+    body = {
         "model": LLM_MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": LLM_MAX_TOK,
         "temperature": LLM_TEMP,
         "stream": False,
-    }).encode("utf-8")
+    }
+    # Thinking models: LLM_REASONING_EFFORT=none switches reasoning off.
+    if os.getenv("LLM_REASONING_EFFORT"):
+        body["reasoning_effort"] = os.getenv("LLM_REASONING_EFFORT")
+    payload = json.dumps(body).encode("utf-8")
 
     try:
         if _HTTP == "httpx":
