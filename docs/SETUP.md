@@ -89,7 +89,9 @@ nano docker/.env
 
 This will:
 - Verify driver + Docker versions
-- Log in to NGC
+- Create the host Python environment `~/.venvs/moonai` from `requirements.txt`
+  (the system Python on current Ubuntu/Debian is "externally managed" and refuses
+  `pip install`; re-run or update it alone with `./scripts/setup-python.sh`)
 - Pull all Docker images
 - Build the custom MONAI Label image (CUDA 12.8 + PyTorch 2.6)
 

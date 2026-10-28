@@ -59,7 +59,7 @@ before adding tumor/anomaly detection. Contributions welcome.
 
 ```bash
 cp docker/.env.example docker/.env     # then edit values (see below)
-./scripts/setup.sh                     # prerequisites, build custom image
+./scripts/setup.sh                     # prerequisites, host Python venv, build custom image
 ./scripts/download-models.sh           # pull MONAI Zoo bundles
 ./scripts/start.sh                     # start the stack
 ./scripts/inference/run-inference.sh --list-models

@@ -35,6 +35,11 @@ ENV_FILE="${PROJECT_ROOT}/docker/.env"
 
 [ -f "$ENV_FILE" ] && source "$ENV_FILE" 2>/dev/null || true
 
+# Host Python with requirements.txt (created by ./scripts/setup-python.sh);
+# falls back to the system python3 when the venv does not exist.
+PY="${MOONAI_PYTHON:-${MOONAI_VENV:-$HOME/.venvs/moonai}/bin/python}"
+[ -x "$PY" ] || PY="python3"
+
 ML_HOST="localhost"
 ML_PORT="${MONAILABEL_PORT:-8000}"
 ML_URL="http://${ML_HOST}:${ML_PORT}"
@@ -72,7 +77,7 @@ while [[ $# -gt 0 ]]; do
         --no-unload-llm)     UNLOAD_LLM=false; shift ;;
         --list-models)
             info "Fetching available models from MONAI Label..."
-            curl -sfL "${ML_URL}/info/" | python3 -c "
+            curl -sfL "${ML_URL}/info/" | "$PY" -c "
 import json,sys
 info=json.load(sys.stdin)
 models=info.get('models',{})
@@ -118,7 +123,7 @@ unload_llm_vram() {
     #   {"data": [{"id": "...", "state": "loaded"}]}
     # We handle both formats in the Python snippet below.
     local instance_ids
-    instance_ids=$(python3 - "$models_json" << 'PYEOF'
+    instance_ids=$("$PY" - "$models_json" << 'PYEOF'
 import json, sys
 data = json.loads(sys.argv[1])
 # v1 API: models list with loaded_instances[].instance_id
@@ -222,7 +227,12 @@ fi
 # Falls back to the last 3 path components if pydicom is unavailable
 # or the path is not a DICOM directory.
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-IMAGE_SLUG=$(python3 - "$IMAGE_PATH" << 'PYEOF'
+# ── Host Python dependencies ──────────────────────────────────
+if ! "$PY" -c "import pydicom, nibabel, numpy, dicom2nifti" 2>/dev/null; then
+    error "Python dependencies missing for ${PY} (pydicom, nibabel, numpy, dicom2nifti). Run:  ./scripts/setup-python.sh"
+fi
+
+IMAGE_SLUG=$("$PY" - "$IMAGE_PATH" << 'PYEOF'
 import sys, os, re
 image_path = sys.argv[1]
 patient_info = ""
@@ -259,7 +269,7 @@ RUN_DIR="${RESULTS_DIR}/${TIMESTAMP}_${MODEL}_${IMAGE_SLUG}"
 # Query the MONAI Label server's /info/ endpoint to get the list
 # of currently loaded models.  If the requested model is not in
 # the list, print helpful instructions and exit.
-AVAILABLE=$(curl -sL "${ML_URL}/info/" | python3 -c "
+AVAILABLE=$(curl -sL "${ML_URL}/info/" | "$PY" -c "
 import json,sys
 try:
     d=json.load(sys.stdin)
@@ -331,12 +341,12 @@ UPLOAD_FILE="$IMAGE_PATH"
 if [ -d "$IMAGE_PATH" ]; then
     info "Image is a DICOM directory — converting to NIfTI on host (dicom2nifti)..."
     NIFTI_TMP=$(mktemp -u /tmp/monai_nifti_XXXXX.nii.gz)
-    if ! python3 - "$IMAGE_PATH" "$NIFTI_TMP" << 'PYEOF'
+    if ! "$PY" - "$IMAGE_PATH" "$NIFTI_TMP" << 'PYEOF'
 import sys, os, glob, tempfile, shutil
 try:
     import dicom2nifti
 except ImportError:
-    sys.stderr.write("dicom2nifti not installed. Install:  python3 -m pip install dicom2nifti\n")
+    sys.stderr.write("dicom2nifti not installed. Run:  ./scripts/setup-python.sh\n")
     sys.exit(2)
 src, dst = sys.argv[1], sys.argv[2]
 tmpd = tempfile.mkdtemp()
@@ -375,7 +385,7 @@ HTTP_CODE=$(curl -sL -w "%{http_code}" \
 if [ "$HTTP_CODE" -eq 200 ] 2>/dev/null; then
     ok "Inference complete (HTTP 200)"
     # MONAI Label returns multipart/form-data; extract the 'params' JSON part
-    FINDINGS_JSON=$(python3 - "$TMPFILE" << 'PYEOF'
+    FINDINGS_JSON=$("$PY" - "$TMPFILE" << 'PYEOF'
 import sys, re, json
 content = open(sys.argv[1], 'rb').read().decode('utf-8', errors='replace')
 match = re.search(r'name="params"[^\r\n]*\r?\n(?:Content-Type:[^\r\n]*\r?\n)?\r?\n(\{.*?\})(?:\r?\n--)', content, re.DOTALL)
@@ -397,7 +407,7 @@ PYEOF
     #   - Warns if output spacing differs from original (resampling)
     #   - Formats detection boxes and classification scores
     # The output is a structured text block passed to the LLM as context.
-    CLINICAL_SUMMARY=$(python3 "${SCRIPT_DIR}/process_findings.py" \
+    CLINICAL_SUMMARY=$("$PY" "${SCRIPT_DIR}/process_findings.py" \
         --tmpfile "$TMPFILE" \
         --model   "$MODEL" \
         --image   "$IMAGE_PATH" \
@@ -410,7 +420,7 @@ PYEOF
 else
     warn "Inference returned HTTP $HTTP_CODE"
     echo "Server response:"
-    cat "$TMPFILE" 2>/dev/null | python3 -m json.tool 2>/dev/null || cat "$TMPFILE" 2>/dev/null
+    cat "$TMPFILE" 2>/dev/null | "$PY" -m json.tool 2>/dev/null || cat "$TMPFILE" 2>/dev/null
     rm -f "$TMPFILE"
     exit 1
 fi
@@ -449,7 +459,7 @@ if [ "$NO_LLM" = false ]; then
     echo ""
     info "Generating radiology report via LLM at ${LLM_URL} ..."
 
-    REPORT=$(python3 - << PYEOF
+    REPORT=$("$PY" - << PYEOF
 import json, sys
 try:
     import urllib.request, urllib.error

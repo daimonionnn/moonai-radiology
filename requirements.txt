@@ -1,7 +1,7 @@
 # Host-side Python dependencies for the helper scripts
 # (process_findings.py, run-inference.sh's inline python, report_generator.py).
 #
-#   python3 -m pip install -r requirements.txt
+#   ./scripts/setup-python.sh   (creates ~/.venvs/moonai with these; run by setup.sh)
 #
 # NOTE: This is NOT for TotalSegmentator — install that in its own venv with a
 # CUDA-matched torch (see scripts/run-totalseg.sh header), because it pulls a

@@ -114,6 +114,10 @@ for dir in \
 done
 ok "Directory tree ready"
 
+# ── 4b. Host Python environment for the helper scripts ───────
+header "Host Python environment"
+"${SCRIPT_DIR}/setup-python.sh" || warn "Python environment setup failed — run ./scripts/setup-python.sh later"
+
 # ── 5. Pull public images ────────────────────────────────────
 header "Pulling Docker images"
 info "Pulling public images (monailabel base, ohif, orthanc, tensorboard)..."

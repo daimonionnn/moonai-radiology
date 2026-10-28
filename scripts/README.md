@@ -9,7 +9,8 @@ Installing, starting and managing the stack.
 
 | Script | Purpose |
 |---|---|
-| `setup.sh` | Prerequisite checks, pull/build images, create directories |
+| `setup.sh` | Prerequisite checks, host Python env, pull/build images, create directories |
+| `setup-python.sh` | Create/update the host Python venv `~/.venvs/moonai` from `requirements.txt` (used by `inference/`) |
 | `build.sh` | Rebuild the custom MONAI Label image |
 | `download-models.sh` | Download MONAI Model Zoo bundles |
 | `install-slicer.sh` | Install 3D Slicer (+ required system libraries) |
