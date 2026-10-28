@@ -17,7 +17,11 @@ Environment (from docker/.env):
     LLM_REASONING_EFFORT   ("none" turns reasoning off for thinking models)
     LLM_REPORT_LANGUAGES   comma list of codes, e.g. "en", "sk", "en,sk"
                            (default "en"; English is drafted even if not listed)
+    LLM_PROMPT_DIR         folder with report.md, translate.md, glossary.json
+                           (default config/prompts; relative to the project root).
+                           The constants below are the fallback when a file is missing.
 """
+import hashlib
 import json
 import os
 import re
@@ -31,6 +35,8 @@ LANGUAGES = {
     "hu": "Hungarian", "pl": "Polish", "uk": "Ukrainian", "fr": "French",
     "es": "Spanish", "it": "Italian",
 }
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 REPORT_PROMPT = """You are an experienced radiologist reviewing an AI-assisted medical imaging analysis.
 Based ONLY on the structured quantitative results below, write a formal radiology report in English.
@@ -95,6 +101,38 @@ Rules:
 {glossary}
 === REPORT ===
 {report}"""
+
+
+def prompt_dir() -> str:
+    d = os.getenv("LLM_PROMPT_DIR") or "config/prompts"
+    return d if os.path.isabs(d) else os.path.join(PROJECT_ROOT, d)
+
+
+def load_prompts() -> tuple[str, str, dict, str]:
+    """(report prompt, translate prompt, glossary, provenance) from LLM_PROMPT_DIR,
+    falling back to the built-in defaults per missing file."""
+    d, used = prompt_dir(), []
+    def read(name, default):
+        path = os.path.join(d, name)
+        if os.path.isfile(path):
+            text = open(path, encoding="utf-8").read()
+            used.append(f"{name} {hashlib.sha256(text.encode()).hexdigest()[:8]}")
+            return text
+        used.append(f"{name} built-in")
+        return default
+    report = read("report.md", REPORT_PROMPT)
+    translate = read("translate.md", TRANSLATE_PROMPT)
+    glossary_text = read("glossary.json", None)
+    glossary = json.loads(glossary_text) if glossary_text else GLOSSARY
+    shown = os.path.relpath(d, PROJECT_ROOT) if d.startswith(PROJECT_ROOT + os.sep) else d
+    return report, translate, glossary, f"{shown} ({', '.join(used)})"
+
+
+def fill(template: str, **values: str) -> str:
+    """Replace {name} placeholders literally (other braces in the text stay)."""
+    for k, v in values.items():
+        template = template.replace("{" + k + "}", v)
+    return template
 
 
 # Lines of the summary that identify the patient or local files. The report
@@ -177,9 +215,12 @@ def number_mismatch(source: str, translation: str) -> list[str]:
 
 def main() -> int:
     summary = sys.stdin.read()
+    report_prompt, translate_prompt, glossary_map, provenance = load_prompts()
+    print(f"Prompts: {provenance}")
+    print()
     codes = [c.strip().lower() for c in os.getenv("LLM_REPORT_LANGUAGES", "en").split(",") if c.strip()] or ["en"]
     try:
-        english = chat(REPORT_PROMPT.format(summary=deidentify(summary)))
+        english = chat(fill(report_prompt, summary=deidentify(summary)))
     except Exception as e:
         print(f"[LLM] Not available: {e}", file=sys.stderr)
         print("[Report generation failed — see the warning above]")
@@ -192,10 +233,10 @@ def main() -> int:
             continue
         language = LANGUAGES.get(code, code)
         try:
-            terms = GLOSSARY.get(code, {})
+            terms = glossary_map.get(code, {})
             glossary = ("  * Use EXACTLY these terms (English → " + language + "):\n" +
                         "".join(f"      {en} → {tr}\n" for en, tr in terms.items())) if terms else ""
-            text = chat(TRANSLATE_PROMPT.format(language=language, report=english, glossary=glossary))
+            text = chat(fill(translate_prompt, language=language, report=english, glossary=glossary))
         except Exception as e:
             sections.append((code.upper(), f"[Translation to {language} failed: {e}]"))
             continue

@@ -6,6 +6,22 @@ MONAI inference produces **structured JSON findings** (segmentation masks, detec
 The LLM integration layer translates these findings into **professional radiology reports** by calling  
 your **LM Studio** instance at `http://localhost:1234` via its OpenAI-compatible API.
 
+## Current report pipeline (run-inference.sh)
+
+`run-inference.sh` calls [`scripts/inference/llm_report.py`](../scripts/inference/llm_report.py),
+configured in `docker/.env`:
+
+| Setting | Meaning |
+|---|---|
+| `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY` | Any OpenAI-compatible server — local (LM Studio, llama-server, vLLM) or cloud (key needed) |
+| `LLM_REASONING_EFFORT` | `none` turns reasoning off for thinking models |
+| `LLM_REPORT_LANGUAGES` | `en`, `sk`, `en,sk`, … — drafted in English, translated, numbers checked |
+| `LLM_PROMPT_DIR` | Prompt set (default [`config/prompts`](../config/prompts/README.md)): `report.md`, `translate.md`, `glossary.json` |
+
+Patient-identifying lines (file paths, names) are removed before any LLM call.
+Each `report.txt` records the prompt set and file hashes it was made with.
+The sections below describe the older standalone `report_generator.py`.
+
 ---
 
 ## LM Studio Setup

@@ -1,0 +1,38 @@
+{
+  "sk": {
+    "pancreas": "pankreas",
+    "spleen": "slezina",
+    "liver": "pečeň",
+    "kidney": "oblička",
+    "adrenal gland": "nadoblička",
+    "gallbladder": "žlčník",
+    "urinary bladder": "močový mechúr",
+    "aorta": "aorta",
+    "inferior vena cava": "dolná dutá žila",
+    "portal vein": "vena portae",
+    "duodenum": "duodenum",
+    "small bowel": "tenké črevo",
+    "colon": "hrubé črevo",
+    "stomach": "žalúdok",
+    "esophagus": "pažerák",
+    "lung": "pľúca",
+    "vertebra": "stavec",
+    "craniocaudal": "kraniokaudálny",
+    "FINDINGS": "NÁLEZ",
+    "IMPRESSION": "ZÁVER",
+    "RECOMMENDATION": "ODPORÚČANIE",
+    "CLINICAL INDICATION": "KLINICKÁ INDIKÁCIA",
+    "TECHNIQUE": "TECHNIKA"
+  },
+  "cs": {
+    "pancreas": "slinivka břišní (pankreas)",
+    "spleen": "slezina",
+    "liver": "játra",
+    "kidney": "ledvina",
+    "adrenal gland": "nadledvina",
+    "gallbladder": "žlučník",
+    "FINDINGS": "NÁLEZ",
+    "IMPRESSION": "ZÁVĚR",
+    "RECOMMENDATION": "DOPORUČENÍ"
+  }
+}

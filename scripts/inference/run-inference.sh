@@ -504,6 +504,7 @@ if [ "$NO_LLM" = false ]; then
         LLM_MAX_TOKENS="${LLM_MAX_TOKENS:-2048}" LLM_TEMPERATURE="${LLM_TEMPERATURE:-0.2}" \
         LLM_TIMEOUT="${LLM_TIMEOUT:-300}" LLM_REASONING_EFFORT="${LLM_REASONING_EFFORT:-}" \
         LLM_REPORT_LANGUAGES="${LLM_REPORT_LANGUAGES:-en}" LLM_API_KEY="${LLM_API_KEY:-}" \
+        LLM_PROMPT_DIR="${LLM_PROMPT_DIR:-}" \
         "$PY" "${SCRIPT_DIR}/llm_report.py")
 
     echo ""
