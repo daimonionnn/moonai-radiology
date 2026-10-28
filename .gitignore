@@ -12,6 +12,7 @@ datasets/.lock
 # ── Model storage (large binary files) ──────────────
 models/bundles/
 models/triton/
+models/templates/
 
 # ── Persistent data & logs ───────────────────────────
 storage/orthanc-db/

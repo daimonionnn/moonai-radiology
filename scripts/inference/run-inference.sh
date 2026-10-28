@@ -407,6 +407,23 @@ PYEOF
     info "Converted → $(du -sh "$NIFTI_TMP" | cut -f1) NIfTI"
 fi
 
+# ── Template registration for bundles trained in a template space ──
+# wholeBrainSeg_Large_UNEST_segmentation expects a T1 affinely registered to MNI305
+# (bundle README); without it the volumes are meaningless. Volumes are converted
+# back to native mL with the affine's determinant (process_findings --volume-scale).
+MNI_MODELS=" wholeBrainSeg_Large_UNEST_segmentation "
+VOLUME_SCALE=1.0; REG_NOTE=""; REG_TMP=""
+if [[ "$MNI_MODELS" == *" ${MODEL} "* ]]; then
+    info "Registering to MNI305 (affine) — required by ${MODEL}..."
+    REG_TMP=$(mktemp -u /tmp/monai_mni_XXXXX.nii.gz)
+    REG_JSON=$("$PY" "${SCRIPT_DIR}/mni_register.py" "$UPLOAD_FILE" "$REG_TMP") \
+        || error "MNI305 registration failed (needs SimpleITK: ./scripts/setup-python.sh)"
+    VOLUME_SCALE=$("$PY" -c "import json,sys; print(json.loads(sys.argv[1])['volume_scale'])" "$REG_JSON")
+    REG_NOTE="affine to MNI305 (SimpleITK, Mattes MI)"
+    UPLOAD_FILE="$REG_TMP"
+    ok "Registered (native/MNI volume factor ${VOLUME_SCALE})"
+fi
+
 info "Running inference (this may take a few minutes)..."
 HTTP_CODE=$(curl -sL -w "%{http_code}" \
     -X POST \
@@ -418,6 +435,7 @@ HTTP_CODE=$(curl -sL -w "%{http_code}" \
 
 # Remove the temporary converted NIfTI (original DICOM dir is untouched).
 [ -n "$NIFTI_TMP" ] && rm -f "$NIFTI_TMP"
+[ -n "$REG_TMP" ] && rm -f "$REG_TMP" "${REG_TMP%.nii.gz}_to_native.tfm"
 
 if [ "$HTTP_CODE" -eq 200 ] 2>/dev/null; then
     ok "Inference complete (HTTP 200)"
@@ -448,6 +466,7 @@ PYEOF
         --tmpfile "$TMPFILE" \
         --model   "$MODEL" \
         --image   "$IMAGE_PATH" \
+        --volume-scale "$VOLUME_SCALE" --registration "$REG_NOTE" \
         --server  "$ML_URL" 2>/dev/null \
         || echo "Clinical summary unavailable — run process_findings.py manually")
 

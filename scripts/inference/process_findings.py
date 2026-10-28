@@ -88,7 +88,7 @@ REFERENCE_RANGES: dict[str, dict] = {
 
 # Structures whose volume is known to be unreliable between engines: on the same
 # CT, MONAI wholeBody gave pancreas 92 mL vs TotalSegmentator 132 mL (see
-# docs/REVIEW_AND_TODO.md §1c). Printed next to any flag so it is not over-read.
+# docs/TODO.md, Done). Printed next to any flag so it is not over-read.
 CAVEATS: dict[str, str] = {
     "pancreas": "boundaries are hard to segment; engines disagree by up to ~40 % — check the mask",
 }
@@ -783,6 +783,11 @@ def main():
                         help="Original image path (DICOM dir or NIfTI) for metadata extraction")
     parser.add_argument("--server",   default="http://localhost:8000",
                         help="MONAI Label server URL for label name fallback")
+    parser.add_argument("--volume-scale", type=float, default=1.0,
+                        help="Multiply volumes by this factor (input was registered to a template; "
+                             "see mni_register.py — converts template-space mL to native mL)")
+    parser.add_argument("--registration", default="",
+                        help="Short note on the registration applied before inference")
     parser.add_argument("--bundles-dir", default=DEFAULT_BUNDLES_DIR,
                         help="Directory of MONAI Zoo bundles (for metadata.json label fallback)")
     args = parser.parse_args()
@@ -850,6 +855,9 @@ def main():
     if img_bytes and is_nifti(img_bytes):
         try:
             volumes, zooms, shape = compute_volumes(img_bytes, label_names)
+            registered = args.volume_scale != 1.0
+            if registered:
+                volumes = [(n, v * args.volume_scale, m * args.volume_scale) for n, v, m in volumes]
             if volumes:
                 lines.append(
                     f"Segmentation: {len(volumes)} structures identified  "
@@ -863,11 +871,18 @@ def main():
                 # inputs to a fixed isotropic resolution (e.g. 1×1×1 mm) before
                 # inference.  If the output spacing differs by >1% from the
                 # original, the volume numbers will be physically misleading.
-                if orig_zooms:
+                if registered:
+                    lines.append(
+                        f"  Registration: {args.registration or 'affine to template'}; the mask is "
+                        f"in template space and volumes are converted to native mL "
+                        f"(× {args.volume_scale:.4f}, the affine's determinant).")
+                elif orig_zooms:
                     import math
+                    # compare sorted spacings: a different axis order (e.g. DICOM read
+                    # vs reoriented NIfTI) is not resampling
                     spacing_mismatch = any(
                         not math.isclose(oz, z, rel_tol=1e-2, abs_tol=1e-3)
-                        for oz, z in zip(orig_zooms, zooms)
+                        for oz, z in zip(sorted(orig_zooms), sorted(zooms))
                     )
                     if spacing_mismatch:
                         lines.append(
