@@ -13,6 +13,7 @@ a reader never relies on a silently altered value.
 
 Environment (from docker/.env):
     LLM_BASE_URL, LLM_MODEL, LLM_MAX_TOKENS, LLM_TEMPERATURE, LLM_TIMEOUT,
+    LLM_API_KEY            Bearer token for cloud APIs (OpenAI etc.); empty for local
     LLM_REASONING_EFFORT   ("none" turns reasoning off for thinking models)
     LLM_REPORT_LANGUAGES   comma list of codes, e.g. "en", "sk", "en,sk"
                            (default "en"; English is drafted even if not listed)
@@ -21,6 +22,7 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.request
 from collections import Counter
 
@@ -95,6 +97,30 @@ Rules:
 {report}"""
 
 
+# Lines of the summary that identify the patient or local files. The report
+# does not need them, and with a cloud LLM they would leave the hospital.
+IDENTIFYING_LINE = re.compile(r"^\s*(Source|Image|Patient[\w ]*|File|Path)\s*:", re.IGNORECASE)
+
+
+def deidentify(summary: str) -> str:
+    return "\n".join(l for l in summary.splitlines() if not IDENTIFYING_LINE.match(l))
+
+
+def _post(body: dict) -> dict:
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    if os.getenv("LLM_API_KEY"):
+        headers["Authorization"] = "Bearer " + os.environ["LLM_API_KEY"]
+    req = urllib.request.Request(
+        os.getenv("LLM_BASE_URL", "http://localhost:1234").rstrip("/") + "/v1/chat/completions",
+        data=json.dumps(body).encode("utf-8"), headers=headers, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=int(os.getenv("LLM_TIMEOUT", "300"))) as resp:
+            return json.load(resp)
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"HTTP {e.code}: {e.read().decode('utf-8', 'replace')[:400]}") from None
+
+
 def chat(prompt: str) -> str:
     body = {
         "model": os.getenv("LLM_MODEL", ""),
@@ -105,14 +131,22 @@ def chat(prompt: str) -> str:
     }
     if os.getenv("LLM_REASONING_EFFORT"):
         body["reasoning_effort"] = os.environ["LLM_REASONING_EFFORT"]
-    req = urllib.request.Request(
-        os.getenv("LLM_BASE_URL", "http://localhost:1234").rstrip("/") + "/v1/chat/completions",
-        data=json.dumps(body).encode("utf-8"),
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=int(os.getenv("LLM_TIMEOUT", "300"))) as resp:
-        result = json.load(resp)
+    # Cloud APIs differ: newer OpenAI models want max_completion_tokens and reject a
+    # custom temperature or some reasoning_effort values. Adapt once on a 400.
+    for _ in range(4):
+        try:
+            result = _post(body)
+            break
+        except RuntimeError as e:
+            msg = str(e)
+            if "max_tokens" in msg and "max_tokens" in body:
+                body["max_completion_tokens"] = body.pop("max_tokens")
+            elif "temperature" in msg and "temperature" in body:
+                body.pop("temperature")
+            elif "reasoning_effort" in msg and "reasoning_effort" in body:
+                body.pop("reasoning_effort")
+            else:
+                raise
     choice = result["choices"][0]
     text = (choice["message"].get("content") or "").strip()
     if not text:
@@ -145,7 +179,7 @@ def main() -> int:
     summary = sys.stdin.read()
     codes = [c.strip().lower() for c in os.getenv("LLM_REPORT_LANGUAGES", "en").split(",") if c.strip()] or ["en"]
     try:
-        english = chat(REPORT_PROMPT.format(summary=summary))
+        english = chat(REPORT_PROMPT.format(summary=deidentify(summary)))
     except Exception as e:
         print(f"[LLM] Not available: {e}", file=sys.stderr)
         print("[Report generation failed — see the warning above]")

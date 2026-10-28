@@ -70,6 +70,14 @@ LLM_BASE_URL  = os.getenv("LLM_BASE_URL",   "http://localhost:1234")  # LM Studi
 LLM_MODEL     = os.getenv("LLM_MODEL",       "llama-3.1-8b-instruct")     # Model identifier
 LLM_MAX_TOK   = int(os.getenv("LLM_MAX_TOKENS", "2048"))                  # Max generation tokens
 LLM_TEMP      = float(os.getenv("LLM_TEMPERATURE", "0.2"))                # Low temp = factual
+LLM_API_KEY   = os.getenv("LLM_API_KEY", "")                               # cloud APIs only
+
+
+def _headers() -> dict:
+    h = {"Content-Type": "application/json", "Accept": "application/json"}
+    if LLM_API_KEY:
+        h["Authorization"] = "Bearer " + LLM_API_KEY
+    return h
 ML_PORT       = int(os.getenv("MONAILABEL_PORT", "8000"))                  # MONAI Label port
 ML_BASE_URL   = f"http://localhost:{ML_PORT}"
 
@@ -384,7 +392,7 @@ def generate_report(model: str, findings_json: dict[str, Any]) -> str:
                 resp = client.post(
                     f"{LLM_BASE_URL}/v1/chat/completions",
                     content=payload,
-                    headers={"Content-Type": "application/json"},
+                    headers=_headers(),
                 )
             resp.raise_for_status()
             result = resp.json()
@@ -393,7 +401,7 @@ def generate_report(model: str, findings_json: dict[str, Any]) -> str:
             req = urllib.request.Request(
                 f"{LLM_BASE_URL}/v1/chat/completions",
                 data=payload,
-                headers={"Content-Type": "application/json", "Accept": "application/json"},
+                headers=_headers(),
             )
             with urllib.request.urlopen(req, timeout=120) as resp:
                 result = json.loads(resp.read())

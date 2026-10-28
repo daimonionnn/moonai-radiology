@@ -27,8 +27,9 @@ GRAY='\033[0;37m'
 pad() { printf "%-30s" "$1"; }
 
 check_http() {
-    local url="$1"
-    if curl -sf --max-time 3 "$url" &>/dev/null; then
+    local url="$1" auth=()
+    [ -n "${2:-}" ] && auth=(-H "Authorization: Bearer $2")
+    if curl -sf --max-time 3 "${auth[@]}" "$url" &>/dev/null; then
         echo -e "${GREEN}UP${NC}"
     else
         echo -e "${RED}DOWN${NC}"
@@ -60,7 +61,7 @@ printf "  "; pad "MONAI Label Swagger";  check_http "http://localhost:${MONAILAB
 printf "  "; pad "OHIF Viewer";          check_http "http://localhost:${OHIF_PORT:-3000}"
 printf "  "; pad "Orthanc Web";          check_http "http://localhost:${ORTHANC_HTTP_PORT:-8042}/app"
 printf "  "; pad "TensorBoard";          check_http "http://localhost:${TENSORBOARD_PORT:-6006}"
-printf "  "; pad "LLM report";           check_http "${LLM_BASE_URL:-http://localhost:1234}/v1/models"
+printf "  "; pad "LLM report";           check_http "${LLM_BASE_URL:-http://localhost:1234}/v1/models" "${LLM_API_KEY:-}"
 
 echo ""
 echo -e "${BOLD}Docker images:${NC}"
