@@ -17,7 +17,7 @@ RUN_DIR="${1:-$(ls -dt "${PROJECT_ROOT}"/results/*_vessels_* 2>/dev/null | head 
 RUN_DIR="$(cd "$RUN_DIR" && pwd)"
 [ -f "${RUN_DIR}/arterial_bone_bowel_removed.nii.gz" ] || { echo "Not a vessel-analysis folder: $RUN_DIR"; exit 1; }
 
-SLICER="$(command -v slicer3d || ls -d "$HOME"/slicer/Slicer-*/Slicer 2>/dev/null | tail -1)"
+SLICER="$(command -v slicer3d || ls -d "$HOME"/slicer/current/Slicer "$HOME"/slicer/Slicer-*/Slicer 2>/dev/null | sort -V | tail -1)"
 [ -x "$SLICER" ] || { echo "3D Slicer not found — run ./scripts/install-slicer.sh"; exit 1; }
 
 echo "Opening ${RUN_DIR} in 3D Slicer..."

@@ -12,7 +12,8 @@
 #  directly in the viewer.  Installation instructions for the
 #  plugin are printed at the end.
 #
-#  Usage:  ./scripts/install-slicer.sh
+#  Usage:  ./scripts/install-slicer.sh             (install or upgrade to latest stable)
+#          SLICER_VERSION=5.10 ./scripts/install-slicer.sh   (a specific release)
 # ============================================================
 set -e
 
@@ -28,49 +29,48 @@ ok()     { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn()   { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 header() { echo -e "\n${BOLD}${CYAN}══ $* ══${NC}"; }
 
-SLICER_VERSION="5.10.0"
+# Latest stable release from download.slicer.org (override: SLICER_VERSION=5.10 …).
+# Re-running the script upgrades to a newer release; older versions are kept in
+# ~/slicer/ and can be deleted by hand. Extensions must be reinstalled per version.
+QUERY="os=linux&stability=release"
+[ -n "${SLICER_VERSION:-}" ] && QUERY="${QUERY}&version=${SLICER_VERSION}"
+META=$(curl -sf -m 30 "https://download.slicer.org/find?${QUERY}") \
+    || { warn "Cannot reach download.slicer.org"; exit 1; }
+read -r SLICER_VERSION DOWNLOAD_PATH SHA512 < <(python3 -c "import json,sys; d=json.load(sys.stdin); print(d['version'], d['download_url'], d.get('sha512') or '-')" <<< "$META")
 SLICER_TARBALL="Slicer-${SLICER_VERSION}-linux-amd64.tar.gz"
-# Use download.slicer.org API — redirects to the correct bitstream for the version
-SLICER_DOWNLOAD_URL="https://download.slicer.org/download?version=5.10&os=linux&stability=release"
+SLICER_DOWNLOAD_URL="https://download.slicer.org${DOWNLOAD_PATH}"
 
-header "Installing 3D Slicer ${SLICER_VERSION}"
+INSTALLED=$(ls -d "${SLICER_DIR}"/Slicer-*-linux-amd64 2>/dev/null | sed -E 's#.*/Slicer-(.*)-linux-amd64#\1#' | sort -V | tail -1)
+header "Installing 3D Slicer ${SLICER_VERSION}${INSTALLED:+ (installed: ${INSTALLED})}"
 
 mkdir -p "$SLICER_DIR"
 
 if [ -d "${SLICER_DIR}/Slicer-${SLICER_VERSION}-linux-amd64" ]; then
-    ok "3D Slicer ${SLICER_VERSION} already installed at ${SLICER_DIR}"
+    ok "3D Slicer ${SLICER_VERSION} (latest) already installed at ${SLICER_DIR}"
 else
-    # Remove any previous zero-byte or incomplete download
     rm -f "${SLICER_DIR}/${SLICER_TARBALL}"
-
-    info "Downloading 3D Slicer ${SLICER_VERSION}..."
-    info "Source: ${SLICER_DOWNLOAD_URL}"
-    info "Target: ${SLICER_DIR}/${SLICER_TARBALL}"
-    info "This is ~1 GB — grab a coffee ☕"
-
-    if ! wget -q --show-progress --content-disposition -L \
-        -O "${SLICER_DIR}/${SLICER_TARBALL}" \
-        "${SLICER_DOWNLOAD_URL}"; then
+    info "Downloading 3D Slicer ${SLICER_VERSION} (~0.5 GB)..."
+    if ! wget -q --show-progress -L -O "${SLICER_DIR}/${SLICER_TARBALL}" "${SLICER_DOWNLOAD_URL}"; then
         warn "Download failed. Please download manually from https://download.slicer.org"
         rm -f "${SLICER_DIR}/${SLICER_TARBALL}"
         exit 1
     fi
-
-    # Verify tarball is not empty
-    TARBALL_SIZE=$(stat -c%s "${SLICER_DIR}/${SLICER_TARBALL}" 2>/dev/null || echo 0)
-    if [ "$TARBALL_SIZE" -lt 100000000 ] 2>/dev/null; then
-        warn "Downloaded file seems too small (${TARBALL_SIZE} bytes) — download may have failed"
-        rm -f "${SLICER_DIR}/${SLICER_TARBALL}"
-        exit 1
+    if [ "$SHA512" != "-" ]; then
+        echo "${SHA512}  ${SLICER_DIR}/${SLICER_TARBALL}" | sha512sum -c --quiet \
+            || { warn "Checksum mismatch — download corrupted"; rm -f "${SLICER_DIR}/${SLICER_TARBALL}"; exit 1; }
+        ok "Checksum verified"
     fi
-
-    info "Extracting (~1 GB, please wait)..."
+    info "Extracting..."
     tar -xzf "${SLICER_DIR}/${SLICER_TARBALL}" -C "${SLICER_DIR}"
     rm -f "${SLICER_DIR}/${SLICER_TARBALL}"
     ok "3D Slicer extracted to: ${SLICER_DIR}/Slicer-${SLICER_VERSION}-linux-amd64"
+    [ -n "$INSTALLED" ] && info "Previous version ${INSTALLED} kept in ${SLICER_DIR} — delete it when no longer needed."
 fi
 
-SLICER_BIN="${SLICER_DIR}/Slicer-${SLICER_VERSION}-linux-amd64/Slicer"
+# ~/slicer/current → newest installed version; launchers use it, so later upgrades
+# need no sudo and no launcher changes.
+ln -sfn "Slicer-${SLICER_VERSION}-linux-amd64" "${SLICER_DIR}/current"
+SLICER_BIN="${SLICER_DIR}/current/Slicer"
 
 # ── System libraries Slicer needs but does not bundle ─────────
 # Without libGLU, Slicer exits immediately with
@@ -95,10 +95,10 @@ cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=3D Slicer ${SLICER_VERSION}
+Name=3D Slicer
 Comment=Medical Image Visualization and Analysis
 Exec=${SLICER_BIN}
-Icon=${SLICER_DIR}/Slicer-${SLICER_VERSION}-linux-amd64/slicer.png
+Icon=${SLICER_DIR}/current/slicer.png
 Terminal=false
 Categories=Science;
 EOF
@@ -107,12 +107,16 @@ ok "Desktop launcher created: $DESKTOP_FILE"
 
 # ── Shell launcher ────────────────────────────────────────────
 LAUNCHER="/usr/local/bin/slicer3d"
+if [ -f "$LAUNCHER" ] && grep -q "${SLICER_BIN}" "$LAUNCHER"; then
+    ok "slicer3d launcher already points to ${SLICER_BIN}"
+else
 sudo bash -c "cat > ${LAUNCHER} << 'EOF'
 #!/bin/bash
 exec ${SLICER_BIN} \"\$@\"
 EOF
 chmod +x ${LAUNCHER}" 2>/dev/null && ok "Created /usr/local/bin/slicer3d launcher" || \
 warn "Could not create /usr/local/bin/slicer3d (no sudo). Run Slicer directly: ${SLICER_BIN}"
+fi
 
 # ── MONAI Label plugin install instructions ──────────────────
 header "MONAI Label Plugin for 3D Slicer"
