@@ -128,6 +128,7 @@ monai/
 | [VESSEL_ANALYSIS.md](VESSEL_ANALYSIS.md) | Renal artery / vessel analysis: TotalSegmentator + vesselFM + 3D Slicer VMTK |
 | [PROJECT_RATIONALE.md](PROJECT_RATIONALE.md) | Why this project, does it make sense, alternatives, regulation |
 | [RADIOLOGIST_SUMMARY.md](RADIOLOGIST_SUMMARY.md) | Project summary for a cooperating radiologist ([Slovak original](SK/SUMAR_PRE_RADIOLOGA.md)) |
+| [research/BETTER_MODELS.md](research/BETTER_MODELS.md) | Survey of better open/commercial models, oncology focus (Oct 2026) |
 | [REVIEW_AND_TODO.md](REVIEW_AND_TODO.md) | Known issues, security prep, roadmap |
 | [history/INITIAL_PLAN.md](history/INITIAL_PLAN.md) | Original project brief and plan (historical) |
 

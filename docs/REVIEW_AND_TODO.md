@@ -195,7 +195,7 @@ no absolute home paths.
 
 **Evaluate more tools and models (focus: oncology)** — see
 [PROJECT_RATIONALE](PROJECT_RATIONALE.md) for why, and the research report
-`reports/Better models for MOONAI.md` (untracked; Slovak original in
+[research/BETTER_MODELS.md](research/BETTER_MODELS.md) (Slovak original in
 [SK/LEPSIE_MODELY_PRE_MOONAI.md](SK/LEPSIE_MODELY_PRE_MOONAI.md)) for sources and licences.
 All of these are research-only (no CE mark); check each weight licence before use —
 several are CC BY-NC(-SA), and ULS+, PI-CAI, PanDx and the `brats` containers have

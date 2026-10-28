@@ -81,8 +81,8 @@ clinical use and keeping this platform for research and for gaps is the sensible
 split.
 
 The full model survey (with sources, licences and a prioritized list of what to add,
-focused on oncology) is in the research report `reports/Better models for MOONAI.md`
-(untracked; Slovak original in [SK/LEPSIE_MODELY_PRE_MOONAI.md](SK/LEPSIE_MODELY_PRE_MOONAI.md));
+focused on oncology) is in the research report [research/BETTER_MODELS.md](research/BETTER_MODELS.md)
+(Slovak original in [SK/LEPSIE_MODELY_PRE_MOONAI.md](SK/LEPSIE_MODELY_PRE_MOONAI.md));
 the resulting tasks are in
 [REVIEW_AND_TODO](REVIEW_AND_TODO.md) §5.
 
