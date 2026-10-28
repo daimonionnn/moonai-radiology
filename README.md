@@ -32,6 +32,9 @@ lesion models — see [TODO](docs/TODO.md). Contributions welcome.
 | **OHIF Viewer** | Browser-based DICOM viewer |
 | **3D Slicer** (host) | Desktop viewer and annotation, connects to MONAI Label |
 | **TotalSegmentator** | Second CT/MR segmentation engine (comparison, bone/bowel removal) |
+| **VISTA3D tumour classes** | Automatic CT tumour candidates (lung, liver, pancreas, colon, bone) — [ONCOLOGY](docs/ONCOLOGY.md) |
+| **ULS+** | Click-to-measure any CT lesion (volume, RECIST axes) — [ONCOLOGY](docs/ONCOLOGY.md) |
+| **nnInteractive** | Interactive 3D outlining in 3D Slicer (points, boxes, scribbles) — [ONCOLOGY](docs/ONCOLOGY.md) |
 | **vesselFM** | Zero-shot 3D vessel segmentation (renal arteries) — [VESSEL_ANALYSIS](docs/VESSEL_ANALYSIS.md) |
 | **LLM** (any OpenAI-compatible server, local or cloud) | Drafts the report from the computed findings, optionally in several languages |
 | Shell scripts | Platform lifecycle and per-examination analyses — [scripts/README](scripts/README.md) |
@@ -169,6 +172,7 @@ moonai-radiology/
 | [ARCHITECTURE](docs/ARCHITECTURE.md) | Component diagram, data flow |
 | [INFERENCE](docs/INFERENCE.md) | Running inference, outputs, MONAI Deploy, Triton |
 | [LLM_INTEGRATION](docs/LLM_INTEGRATION.md) | Report pipeline, languages, prompts, local vs cloud LLM |
+| [ONCOLOGY](docs/ONCOLOGY.md) | Click-to-measure any CT lesion (ULS+): volume, RECIST axes |
 | [VESSEL_ANALYSIS](docs/VESSEL_ANALYSIS.md) | Renal arteries: TotalSegmentator + vesselFM + 3D Slicer VMTK |
 | [LABELING](docs/LABELING.md) | Annotation workflows (3D Slicer, OHIF) |
 | [TRAINING](docs/TRAINING.md) | Fine-tuning, custom training, TensorBoard |
@@ -177,6 +181,7 @@ moonai-radiology/
 | [TODO](docs/TODO.md) | Prioritized open work (oncology models first) and what is done |
 | [PROJECT_RATIONALE](docs/PROJECT_RATIONALE.md) | Why this project, alternatives, regulation (MDR, AI Act, GDPR) |
 | [RADIOLOGIST_SUMMARY](docs/RADIOLOGIST_SUMMARY.md) | Summary for a cooperating radiologist ([Slovak original](docs/SK/SUMAR_PRE_RADIOLOGA.md)) |
+| [research/PUBLIC_DATA_TESTS](docs/research/PUBLIC_DATA_TESTS.md) | Models tested on public tumour cases (LIDC, CRLM, KiTS) |
 | [research/BETTER_MODELS](docs/research/BETTER_MODELS.md) | Survey of better open/commercial models, oncology focus (Oct 2026) |
 | [history/INITIAL_PLAN](docs/history/INITIAL_PLAN.md) | Original brief and plan (historical) |
 

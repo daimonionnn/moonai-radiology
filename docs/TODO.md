@@ -17,15 +17,20 @@ retrospective cases and compare with the radiologists' reports before any study 
 
 The core gap: measure any lesion with one click and follow it over time (RECIST).
 
-- [ ] **ULS+** (Radboud) — click-to-segment any CT lesion with long/short axis
-      (RECIST-style measurement). Confirm the weight licence on Zenodo first.
-- [ ] **nnInteractive** (DKFZ) — interactive 3D segmentation service next to MONAI
-      Label (3D Slicer and OHIF clients, ~10 GB VRAM) for lesion labeling and correction.
+- [x] **ULS+** (Radboud) — click-to-measure any CT lesion (volume, RECIST long/short
+      axis): `scripts/oncology/measure-lesion.sh`, [ONCOLOGY](ONCOLOGY.md). Mean Dice
+      0.71 on 9 public lesions. Licence stated inconsistently → non-commercial only.
+- [ ] ULS+ next: click from OHIF / a Slicer markup instead of typing coordinates;
+      several lesions per study; results as DICOM SEG/SR in Orthanc.
+- [x] **nnInteractive** (DKFZ) — server `scripts/oncology/nninteractive-server.sh`, Slicer
+      set up by `scripts/oncology/setup-slicer.sh` ([ONCOLOGY](ONCOLOGY.md)). Official
+      Docker image fails on Blackwell (PyTorch 2.6) → host venv with cu128.
+- [ ] nnInteractive in OHIF (OHIF-AI client) so it also works in the browser.
 - [ ] **LesionLocator** (DKFZ) — lesion tracking across follow-up scans (volumetric
       follow-up, RECIST 1.1 change table).
-- [ ] New `scripts/oncology/` analysis (like `scripts/vessels/`): click → mask →
-      axes + volume → DICOM SEG/SR in Orthanc → follow-up comparison; include a
-      reproducibility test (same lesion, different clicks).
+- [ ] Follow-up comparison in `scripts/oncology/` (with LesionLocator): baseline vs
+      follow-up per lesion, RECIST 1.1 change table; reproducibility test (same lesion,
+      different clicks).
 - [ ] **LesionTracer** (autoPET III winner) — whole-body PET/CT lesions (FDG, PSMA).
 - [ ] **BrainLesion `brats` package** — replace the old `brats_mri_segmentation`
       bundle (adds brain metastases and meningioma).
@@ -39,9 +44,15 @@ The core gap: measure any lesion with one click and follow it over time (RECIST)
 
 ## P2 — General models and tools (not only oncology)
 
+- [x] **VISTA3D fixed**: image rebuilt with Python 3.11.18 (was 3.11.0rc1 →
+      `pytorch-ignite` crashed); tumour candidates via `scripts/oncology/find-tumours.sh`
+      (liver mets 4/7, no false positives).
+- [ ] VISTA3D through MONAI Label / OHIF: add a prompted infer task (the generic bundle
+      task sends no `class_vector`).
+
 - [ ] **TotalSegmentator v2 as the primary segmenter** (CT + MR `total_mr`), not just
       a reference; compare with and likely retire `wholeBody_ct_segmentation` and
-      `swin_unetr_btcv`. Verify the `liver_lesions` licence in the installed README.
+      `swin_unetr_btcv`. (`liver_lesions` runs without a licence — verified.)
 - [ ] **NV-Segment-CTMR** (VISTA3D successor, 345+ CT/MR classes) — possible
       replacement for `wholeBrainSeg_UNEST`; check its weight licence.
 - [ ] **MRSegmentator** as a second opinion for MR anatomy.
@@ -75,10 +86,18 @@ The core gap: measure any lesion with one click and follow it over time (RECIST)
       required before working with hospital data.
 - [ ] Validate one CT and one MRI mask visually in 3D Slicer against a reference tool.
 - [ ] Verify `scripts/vessels/run-vessel-analysis.sh` in CPU mode.
-- [ ] Detection output (`lung_nodule_ct_detection`): verify on a scan with a known
-      nodule; add small pytest smoke tests on saved responses.
+- [x] Detection output (`lung_nodule_ct_detection`) verified on LIDC-IDRI-0001: nodule
+      found; box format fixed (`cccwhd`). Still: box depth ~2.5× too large (unverified),
+      no confidence scores; add pytest smoke tests on saved responses.
+- [ ] Extend the public-data tests (more cases per task, brain tumour / BraTS,
+      pancreas) — [PUBLIC_DATA_TESTS](research/PUBLIC_DATA_TESTS.md).
 
 ## P5 — Repository and maintenance
+
+- [ ] Version upgrades (checked 2026-10-28): **OHIF v3.11 → v3.13.13** (test the
+      app-config / proxy), **MONAI 1.4 → 1.6** only when MONAI Label supports it (0.8.5
+      is the latest and is built on 1.4), PyTorch in the image (2.7) with MONAI.
+      Done: Slicer 5.12.4, TotalSegmentator 2.18, Orthanc 26.9.1 image, image Python fix.
 
 - [ ] Make the repository public (Settings → visibility) after a final review.
 - [ ] `CONTRIBUTING.md` + issue templates.

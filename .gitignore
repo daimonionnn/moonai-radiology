@@ -13,6 +13,8 @@ datasets/.lock
 models/bundles/
 models/triton/
 models/templates/
+models/uls_plus/
+models/nninteractive/
 
 # ── Persistent data & logs ───────────────────────────
 storage/orthanc-db/
@@ -29,6 +31,7 @@ datasets/nifti/**
 datasets/pathology/**
 datasets/mammography/**
 datasets/xray/**
+datasets/tmp/**
 # MONAI Label writes masks derived from patient images here
 datasets/labels/**
 !datasets/ct/.gitkeep

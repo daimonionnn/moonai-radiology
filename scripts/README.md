@@ -26,6 +26,7 @@ Installing, starting and managing the stack.
 |---|---|---|---|
 | `inference/` | `run-inference.sh`, `run-totalseg.sh`, `process_findings.py`, `report_generator.py` | Run a MONAI model or TotalSegmentator on a study, organ volumes with reference-range flags, LLM report draft | [INFERENCE](../docs/INFERENCE.md), [LLM_INTEGRATION](../docs/LLM_INTEGRATION.md) |
 | *(config)* | `config/prompts/` — LLM report prompts and glossary, editable text; chosen by `LLM_PROMPT_DIR` | | [config/prompts/README](../config/prompts/README.md) |
+| `oncology/` | `find-tumours.sh`, `measure-lesion.sh`, `lesion_measure.py`, `nninteractive-server.sh`, `setup-slicer.sh`, `slicer_setup.py` | Automatic tumour candidates (VISTA3D); click-to-measure a CT lesion with ULS+ (volume, RECIST axes); nnInteractive server + 3D Slicer setup for interactive outlining | [ONCOLOGY](../docs/ONCOLOGY.md) |
 | `vessels/` | `run-vessel-analysis.sh`, `open-vessels-in-slicer.sh`, `vessel_analysis.py`, `slicer_load_vessels.py` | Renal artery analysis: TotalSegmentator + vesselFM, bone/bowel-removed 3D view, open in 3D Slicer | [VESSEL_ANALYSIS](../docs/VESSEL_ANALYSIS.md) |
 
 New analysis types (e.g. oncology lesion measurement) get their own subfolder with a
