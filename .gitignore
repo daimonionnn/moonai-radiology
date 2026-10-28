@@ -7,7 +7,7 @@ docker/.env
 datasets/.lock
 # Stray control-character filename accidentally committed (an NVIDIA GPG key blob).
 # Remove from tracking with:  git rm --cached "$(printf '\004')"
-"\004"
+
 
 # ── Model storage (large binary files) ──────────────
 models/bundles/
