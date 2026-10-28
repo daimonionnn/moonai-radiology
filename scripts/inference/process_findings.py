@@ -636,12 +636,15 @@ def format_detection(params: dict) -> list[str]:
 
     **Bounding boxes** (RetinaNet-style)::
 
-        params["box"]   = [[x1, y1, z1, x2, y2, z2], ...]
-        params["label"] = ["nodule", ...]
-        params["score"] = [0.87, ...]
+        params["box"]   = [[cx, cy, cz, w, h, d], ...]   # "cccwhd", world mm (LPS)
+        params["label"] = [0, ...]
 
-    Box coordinates are in voxel space.  We compute the centroid as the
-    midpoint ``((x1+x2)/2, ...)`` and the extent as ``|x2-x1| × |y2-y1| × |z2-z1|``.
+    ``lung_nodule_ct_detection`` ends its post-processing with
+    ``ConvertBoxModed(src_mode="xyzxyz", dst_mode="cccwhd")``: centre + size, not two
+    corners (reading it as corners gave 100–340 mm "nodules"). MONAI Label drops the
+    ``label_scores``, so no confidence is available. On LIDC-IDRI-0001 the depth ``d``
+    came out ~2.5× the annotated extent (= that scan's slice thickness) — treat it as
+    unverified; the axial long axis ``max(w, h)`` is what RECIST reports anyway.
 
     **Centroids** (point-based models)::
 
@@ -671,23 +674,21 @@ def format_detection(params: dict) -> list[str]:
     if not is_detection:
         return lines
 
-    # Coordinate space: MONAI Label's detection post-processing applies
-    # AffineBoxToWorldCoordinated, so boxes come back in WORLD millimetres
-    # (patient space) as [x1, y1, z1, x2, y2, z2] — NOT voxel indices.
+    # Coordinate space: AffineBoxToWorldCoordinated → WORLD millimetres (LPS),
+    # then ConvertBoxModed → [cx, cy, cz, w, h, d] (see docstring).
     if boxes:
         lines.append(f"Detection: {len(boxes)} finding(s)")
         for i, box in enumerate(boxes):
             lbl = labels[i] if i < len(labels) else f"finding_{i+1}"
             sc  = f"  confidence={scores[i]:.3f}" if i < len(scores) else ""
             try:
-                cx, cy, cz = (box[0]+box[3])/2, (box[1]+box[4])/2, (box[2]+box[5])/2
-                sx, sy, sz = abs(box[3]-box[0]), abs(box[4]-box[1]), abs(box[5]-box[2])
-                diam = max(sx, sy, sz)   # long-axis diameter — the clinically reported size
+                cx, cy, cz, sx, sy, sz = (float(v) for v in box[:6])
+                diam = max(sx, sy)   # axial long axis (RECIST); depth sz is unverified
                 lines.append(
                     f"  #{i+1} label={lbl}  "
-                    f"centroid=({cx:.1f},{cy:.1f},{cz:.1f}) mm  "
-                    f"size=({sx:.1f}×{sy:.1f}×{sz:.1f}) mm  "
-                    f"max_diameter={diam:.1f} mm{sc}"
+                    f"centre=({cx:.1f},{cy:.1f},{cz:.1f}) mm LPS  "
+                    f"box={sx:.1f}×{sy:.1f} mm axial (depth {sz:.1f} mm, unverified)  "
+                    f"axial_long_axis={diam:.1f} mm{sc}"
                 )
             except Exception:
                 lines.append(f"  #{i+1} label={lbl}  box={box}{sc}")
