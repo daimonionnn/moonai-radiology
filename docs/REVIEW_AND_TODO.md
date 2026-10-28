@@ -100,7 +100,7 @@ DICOM `Modality` tag into the prompt.
 | 2.4 | process_findings.py / run-inference.sh | Modality now read from DICOM tag + passed to LLM; prompt uses it | ✅ done |
 | 2.5 | process_findings.py | Negative spacing → false warning — fixed (`abs()`) | ✅ done |
 | 2.6 | process_findings.py / run-inference.sh | DICOM `/session/` path broke resample-back → tiny volumes; now convert DICOM→NIfTI on host and upload NIfTI | ✅ done |
-| 2.7 | docker/.env | LLM defaults were stale; report LLM now on Strix Halo `localhost:1234` (`qwen3.6-27b-mtp@q8_0`). Note: it is a *thinking* model — set `LLM_MAX_TOKENS≥4096` and `LLM_TIMEOUT≥600`, or use a non-thinking model, or the report times out. | 🟡 config |
+| 2.7 | LLM report | Thinking models used the whole token budget on reasoning → empty report; remote LLM was unloaded by run-inference.sh. Fixed: `LLM_REASONING_EFFORT=none`, remote servers are not unloaded, model is loaded before the report, empty response gives a clear warning | ✅ done |
 | 2.8 | Multipart parsing | `params`-extraction regex duplicated in `run-inference.sh` and `process_findings.py` | 🟡 low |
 
 ### Segmentation engines (both available, for comparison)
@@ -180,18 +180,38 @@ no absolute home paths.
 4. Validate one CT and one MRI mask visually in 3D Slicer vs. a reference tool (1c).
 
 **Next (make it shareable)**
-5. Security/GitHub-prep §3.
-6. CPU path documented (done) — verify it end-to-end once GPU is out.
+5. ~~Security/GitHub-prep §3.~~ ✅ (fresh repository, credentials only in `docker/.env`)
+6. ~~CPU path~~ ✅ `MOONAI_DEVICE=gpu|cpu|auto`; verified for MONAI Label inference.
+   Still to verify on CPU: `scripts/vessels/run-vessel-analysis.sh`.
 7. Detection output parsing (2.3); add small pytest smoke tests on saved responses.
+8. Make the repository public (Settings → visibility) once reviewed; add
+   `CONTRIBUTING.md` + issue templates.
+
+**Report quality (LLM)**
+- [x] Report languages `LLM_REPORT_LANGUAGES` (e.g. `en,sk`), number check on translations.
+- [x] Editable prompts in `config/prompts/` (`LLM_PROMPT_DIR`).
+- [x] Optional cloud LLM (`LLM_API_KEY`); identifying lines removed before any LLM call.
+- [ ] Report only clinically relevant organs and flagged deviations (today it lists
+      every structure, incl. ribs and muscles).
+- [ ] Stricter IMPRESSION: only flagged findings, no own interpretation (the model
+      added an unrequested explanation for a 0.4 cm³ lung lobe).
+- [ ] Extend `glossary.json` as Slovak/Czech reports reveal wrong terms.
+- [ ] Central-European organ-volume reference cohort (current kidney references are
+      Japanese, J-MID).
+
+**Data protection**
+- [ ] Result folder names contain the patient name from DICOM
+      (`results/…_<SURNAME>_<NAME>_…`); use a pseudonym / study UID instead — required before
+      working with hospital data.
 
 **Later (the actual clinical value)**
-8. Tumor/anomaly detection. Your 80/20 (positive/healthy) intuition is in the
+9. Tumor/anomaly detection. Your 80/20 (positive/healthy) intuition is in the
    right spirit but be careful: for *detection/segmentation* you need
    **pixel-level expert annotations**, not just image-level labels, and hundreds
    of cases per body region/modality with a held-out test set. Start with one
    narrow, well-scoped task (e.g. one organ, one modality) rather than "all tumors".
-9. Human-in-the-loop review UI so a radiologist accepts/edits every AI finding.
-10. Provenance & audit: store model version, spacing, and mask with every report.
+10. Human-in-the-loop review UI so a radiologist accepts/edits every AI finding.
+11. Provenance & audit: store model version, spacing, and mask with every report.
 
 **Evaluate more tools and models (focus: oncology)** — see
 [PROJECT_RATIONALE](PROJECT_RATIONALE.md) for why, and the research report
