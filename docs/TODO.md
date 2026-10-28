@@ -45,10 +45,17 @@ The core gap: measure any lesion with one click and follow it over time (RECIST)
 ## P2 — General models and tools (not only oncology)
 
 - [x] **VISTA3D fixed**: image rebuilt with Python 3.11.18 (was 3.11.0rc1 →
-      `pytorch-ignite` crashed); tumour candidates via `scripts/oncology/find-tumours.sh`
+      `pytorch-ignite` crashed); tumour candidates via `scripts/oncology/find-tumours-vista3d.sh`
       (liver mets 4/7, no false positives).
 - [ ] VISTA3D through MONAI Label / OHIF: add a prompted infer task (the generic bundle
       task sends no `class_vector`).
+- [ ] VISTA3D false positives on a normal CT (5 candidates; "colon cancer" 10.8 mL of
+      soft-tissue density, ~32 HU). Measure the false-positive rate on more normal scans
+      first; candidate filters to evaluate: minimum size for bone lesions, confidence /
+      probability output, agreement with a second model (`find-tumours-totalseg.sh` now gives
+      the same output format; on the normal CT the two models agreed on none of their
+      candidates). Do **not** mask out the bowel —
+      that would also remove real colon tumours.
 
 - [ ] **TotalSegmentator v2 as the primary segmenter** (CT + MR `total_mr`), not just
       a reference; compare with and likely retire `wholeBody_ct_segmentation` and
@@ -94,11 +101,28 @@ The core gap: measure any lesion with one click and follow it over time (RECIST)
 
 ## P5 — Repository and maintenance
 
-- [ ] Version upgrades (checked 2026-10-28): **OHIF v3.11 → v3.13.13** (test the
-      app-config / proxy), **MONAI 1.4 → 1.6** only when MONAI Label supports it (0.8.5
-      is the latest and is built on 1.4), PyTorch in the image (2.7) with MONAI.
-      Done: Slicer 5.12.4, TotalSegmentator 2.18, Orthanc 26.9.1 image, image Python fix.
-
+- [ ] Run `./scripts/check-updates.sh` every few months; re-test on the public cases after
+      upgrades. Bundle updates that need a newer MONAI than the image are marked "keep".
+- [x] Upgraded 2026-10-28: MONAI 1.4 → **1.6.1**, PyTorch 2.7 → **2.11 (cu128)**, all MONAI
+      Zoo bundles to their latest releases, Slicer 5.12.4, TotalSegmentator 2.18, Orthanc
+      26.9.1. Needed three fixes: MONAI ≥ 1.5 `Spacingd` vs MONAI Label 0.8.5 (patched in the
+      Dockerfile), cuCIM for CUDA 13 pulled by `monai[all]` (replaced with cu12),
+      `swin_unetr_btcv` 0.6.0 configs from the zoo dev branch (released 0.5.8 still passes
+      `img_size`), `pancreas_ct_dints` `torch.load(weights_only=False)` + CPU fallback. The
+      bundle sync in `entrypoint.sh` never updated existing bundles — fixed (version +
+      config checksum). Regression on CPU: CT volumes and VISTA3D identical, brain within
+      0.1 %, lung nodule box centre moved ~11 mm (still on the nodule, 7 mm from the
+      annotation). Previous image kept as `monai-platform/monailabel:monai14`, bundles in
+      `models/bundles_monai14/`.
+- [x] GPU regression after the upgrade: CT volumes identical (±0.1 cm³), brain 1347.6
+      (was 1347.0), VISTA3D and ULS+ identical, `swin_unetr` works.
+- [ ] `pancreas_ct_dints_segmentation` (first real test): needs **contrast** CT — on the
+      native CT pancreas 15.6 cm³ (wrong), on the arterial phase 116 cm³ (plausible) but a
+      **false 5.9 cm³ "pancreatic tumour"** on a normal scan. Do not use the tumour output
+      without the PanDx alternative (P1) and a specificity test. The CPU filter that skips
+      it may be unnecessary now (map_location falls back to CPU) — verify.
+- [ ] OHIF v3.11 → v3.13.13: server side tested (page + Orthanc proxy OK with our config);
+      check the viewer in a browser, then switch the tag in both compose files.
 - [ ] Make the repository public (Settings → visibility) after a final review.
 - [ ] `CONTRIBUTING.md` + issue templates.
 - [ ] Multipart `params` parsing is duplicated in `run-inference.sh` and
