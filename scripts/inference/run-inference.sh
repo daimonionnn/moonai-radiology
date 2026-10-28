@@ -497,78 +497,14 @@ if [ "$NO_LLM" = false ]; then
     ensure_llm_loaded "$LLM_URL" "$LLM_MODEL_NAME"
     info "Generating radiology report via LLM at ${LLM_URL} ..."
 
-    REPORT=$("$PY" - << PYEOF
-import json, sys
-try:
-    import urllib.request, urllib.error
-
-    prompt = """You are an experienced radiologist reviewing an AI-assisted medical imaging analysis.
-Based ONLY on the structured quantitative results below, write a formal radiology report.
-
-STRICT RULES — follow exactly:
-  * Use the 'Modality' stated in the results. Do NOT guess or change the modality.
-  * Do NOT invent normal/reference ranges. Only comment on normality when the
-    results give a 'Ref' range and a Flag for that structure.
-  * For any structure whose Ref is '-', report the measured volume WITHOUT any
-    statement about whether it is normal, high, or low.
-  * Only call a value HIGH/LOW if it is explicitly flagged '⚠ HIGH' / '⚠ LOW'.
-  * Do not fabricate findings that are not present in the data below.
-
-Report format:
-  CLINICAL INDICATION: (infer from model + the stated modality only)
-  TECHNIQUE: (model used, stated modality)
-  FINDINGS:
-    - List each structure with its measured volume; note the reference range and
-      flag ONLY when one is provided
-    - For detection results: describe number, location, and size of findings
-    - For classification: report confidence scores and positive findings
-  IMPRESSION:
-    - summary of the structures explicitly flagged '⚠ HIGH' or '⚠ LOW' (if none, say so)
-  RECOMMENDATION: (if applicable)
-
-=== STRUCTURED AI ANALYSIS RESULTS ===
-${CLINICAL_SUMMARY}
-
-Write the radiology report now:"""
-
-    body = {
-        "model": "${LLM_MODEL_NAME}",
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": ${LLM_MAX_TOKENS:-2048},
-        "temperature": ${LLM_TEMPERATURE:-0.2},
-        "stream": False,
-    }
-    # Thinking models spend tokens on reasoning before the report. The report only
-    # verbalizes numbers computed in code, so reasoning is usually unnecessary:
-    # LLM_REASONING_EFFORT=none switches it off (OpenAI-compatible parameter).
-    if "${LLM_REASONING_EFFORT:-}":
-        body["reasoning_effort"] = "${LLM_REASONING_EFFORT:-}"
-    payload = json.dumps(body).encode("utf-8")
-
-    req = urllib.request.Request(
-        "${LLM_URL}/v1/chat/completions",
-        data=payload,
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
-        method="POST"
-    )
-    with urllib.request.urlopen(req, timeout=${LLM_TIMEOUT:-300}) as resp:
-        result = json.load(resp)
-        choice = result["choices"][0]
-        report = (choice["message"].get("content") or "").strip()
-        if not report:
-            used = (result.get("usage", {}).get("completion_tokens_details") or {}).get("reasoning_tokens")
-            print(f"[LLM] Empty report (finish_reason={choice.get('finish_reason')}, "
-                  f"reasoning_tokens={used}). A thinking model probably used the whole "
-                  f"LLM_MAX_TOKENS on reasoning — set LLM_REASONING_EFFORT=none or raise "
-                  f"LLM_MAX_TOKENS in docker/.env.", file=sys.stderr)
-            print("[Report generation failed — empty LLM response, see warning above]")
-        else:
-            print(report)
-except Exception as e:
-    print(f"[LLM] Not available: {e}", file=sys.stderr)
-    print("[Report generation skipped — LM Studio may not be running]")
-PYEOF
-)
+    # Drafted in English, translated to LLM_REPORT_LANGUAGES with a number check
+    # (scripts/inference/llm_report.py).
+    REPORT=$(printf '%s' "$CLINICAL_SUMMARY" | \
+        LLM_BASE_URL="$LLM_URL" LLM_MODEL="$LLM_MODEL_NAME" \
+        LLM_MAX_TOKENS="${LLM_MAX_TOKENS:-2048}" LLM_TEMPERATURE="${LLM_TEMPERATURE:-0.2}" \
+        LLM_TIMEOUT="${LLM_TIMEOUT:-300}" LLM_REASONING_EFFORT="${LLM_REASONING_EFFORT:-}" \
+        LLM_REPORT_LANGUAGES="${LLM_REPORT_LANGUAGES:-en}" \
+        "$PY" "${SCRIPT_DIR}/llm_report.py")
 
     echo ""
     echo -e "${BOLD}${CYAN}══ Radiology Report (LLM Generated) ══${NC}"
@@ -583,6 +519,7 @@ PYEOF
             echo "Model:     ${MODEL}"
             echo "Image:     ${IMAGE_PATH}"
             echo "LLM:       ${LLM_MODEL_NAME} @ ${LLM_URL}"
+            echo "Languages: ${LLM_REPORT_LANGUAGES:-en}"
             echo "============================================================"
             echo ""
             echo "=== QUANTITATIVE FINDINGS ==="
