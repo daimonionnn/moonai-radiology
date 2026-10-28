@@ -39,7 +39,7 @@ working proof of concept showing how to continue.
 ## Lessons from building it
 
 The biggest risk turned out to be **how results are interpreted, not the models
-themselves** (details in [REVIEW_AND_TODO](REVIEW_AND_TODO.md) §1):
+themselves** (summary in [TODO](TODO.md), section *Done*):
 
 - The LLM invented "normal ranges" when none were supplied. Fixed: reference ranges
   and flags are computed in Python; the LLM only words the numbers it is given.
@@ -84,7 +84,7 @@ The full model survey (with sources, licences and a prioritized list of what to 
 focused on oncology) is in the research report [research/BETTER_MODELS.md](research/BETTER_MODELS.md)
 (Slovak original in [SK/LEPSIE_MODELY_PRE_MOONAI.md](SK/LEPSIE_MODELY_PRE_MOONAI.md));
 the resulting tasks are in
-[REVIEW_AND_TODO](REVIEW_AND_TODO.md) §5.
+[TODO](TODO.md) (P1/P2).
 
 ## Regulatory note (EU / Slovakia)
 
