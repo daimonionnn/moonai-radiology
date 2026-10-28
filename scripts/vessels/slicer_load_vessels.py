@@ -18,9 +18,17 @@ ct = slicer.util.loadVolume(p("arterial.nii.gz"), {"name": "CT arterial"})
 clean = slicer.util.loadVolume(p("arterial_bone_bowel_removed.nii.gz"),
                                {"name": "CT bone+bowel removed", "show": False})
 slicer.util.setSliceViewerLayers(background=ct, fit=True)
-for color in ("Red", "Yellow", "Green"):
-    slicer.app.layoutManager().sliceWidget(color).sliceLogic().GetBackgroundLayer() \
-        .GetVolumeNode().GetDisplayNode().SetWindowLevel(600, 150)   # CT angiography window
+
+
+def set_ct_angio_window():
+    # Auto window/level is on by default and is recomputed after loading, which
+    # overrode a plain SetWindowLevel (slices looked washed-out grey).
+    d = ct.GetDisplayNode()
+    d.AutoWindowLevelOff()
+    d.SetWindowLevel(600, 150)   # CT angiography: W 600 / L 150 HU
+
+
+set_ct_angio_window()
 
 # Segmentation (label map → named segments, shown in 2D only). The label map covers
 # exactly the kidney/aorta region, so its bounds also define the 3D crop box.
@@ -77,10 +85,18 @@ if bounds:
 else:
     view.resetFocalPoint()
 view.forceRender()
+set_ct_angio_window()   # again, after all loading/processing has finished
+slicer.app.processEvents()
+# and once more after the GUI has settled (interactive window computes histograms later)
+import qt
+qt.QTimer.singleShot(2000, set_ct_angio_window)
 
 if os.environ.get("VESSEL_SCREENSHOT"):
     slicer.app.processEvents()
     import ScreenCapture
     ScreenCapture.ScreenCaptureLogic().captureImageFromView(view, os.environ["VESSEL_SCREENSHOT"])
+    if os.environ.get("VESSEL_SLICE_SCREENSHOT"):
+        red = slicer.app.layoutManager().sliceWidget("Red").sliceView()
+        ScreenCapture.ScreenCaptureLogic().captureImageFromView(red, os.environ["VESSEL_SLICE_SCREENSHOT"])
     if os.environ.get("VESSEL_EXIT"):
         slicer.app.exit(0)
