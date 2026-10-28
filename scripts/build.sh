@@ -32,7 +32,7 @@ done
 
 info "Building monai-platform/monailabel:latest ..."
 info "Base image: nvcr.io/nvidia/cuda:12.8.0-cudnn-devel-ubuntu22.04"
-info "This installs: PyTorch 2.6 (cu128), MONAI Core, MONAI Label, MONAI Deploy, TorchXRayVision"
+info "This installs: Python 3.11 (deadsnakes), PyTorch 2.7 (cu128), MONAI Core, MONAI Label, MONAI Deploy, TorchXRayVision"
 
 DOCKER_BUILDKIT=0 docker build \
     ${NO_CACHE} \

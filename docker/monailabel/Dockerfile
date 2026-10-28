@@ -12,6 +12,15 @@ LABEL cuda.version="12.8"
 
 # ── System deps ─────────────────────────────────────────────
 ENV DEBIAN_FRONTEND=noninteractive
+# The current CUDA base image ships /tmp as 1755: apt's sandbox user cannot write its
+# temp files there and every 'apt-get update' fails with "repository is not signed".
+RUN chmod 1777 /tmp
+# Ubuntu 22.04's own python3.11 is the pre-release 3.11.0rc1, whose enum bug crashes
+# pytorch-ignite (needed by VISTA3D and other bundles) — take a final 3.11.x from the
+# deadsnakes PPA instead.
+RUN apt-get update && apt-get install -y --no-install-recommends software-properties-common gpg-agent \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && rm -rf /var/lib/apt/lists/*
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.11 \
     python3.11-dev \
@@ -34,7 +43,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Set python3.11 as default
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
     && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
-    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
+    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 \
+    && python3.11 -c "import sys; assert sys.version_info.releaselevel == 'final', sys.version"
 
 # ── PyTorch 2.7 — CUDA 12.8 wheels (Blackwell sm_120 support) ──
 RUN pip install --no-cache-dir \
@@ -44,7 +54,10 @@ RUN pip install --no-cache-dir \
     --index-url https://download.pytorch.org/whl/cu128
 
 # ── MONAI Core (all extras) ──────────────────────────────────
-RUN pip install --no-cache-dir \
+# software-properties-common (for the deadsnakes PPA) pulls apt's python3-blinker, which
+# pip cannot uninstall ("distutils installed project") — install ours alongside it.
+RUN pip install --no-cache-dir --ignore-installed blinker \
+    && pip install --no-cache-dir \
     "monai[all]==1.4.0"
 
 # ── MONAI Label ──────────────────────────────────────────────
