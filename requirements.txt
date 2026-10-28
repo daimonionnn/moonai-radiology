@@ -1,0 +1,14 @@
+# Host-side Python dependencies for the helper scripts
+# (process_findings.py, run-inference.sh's inline python, report_generator.py).
+#
+#   python3 -m pip install -r requirements.txt
+#
+# NOTE: This is NOT for TotalSegmentator — install that in its own venv with a
+# CUDA-matched torch (see scripts/run-totalseg.sh header), because it pulls a
+# large torch/nnU-Net stack that you don't want mixed with these light deps.
+
+pydicom>=2.4        # read DICOM tags (modality, spacing) + series handling
+nibabel>=5.0        # load NIfTI segmentation masks / headers
+numpy>=1.24         # voxel counting / volume math
+dicom2nifti>=2.4    # convert DICOM series -> NIfTI on the host (the point-3 fix)
+httpx>=0.24         # optional: nicer HTTP client for report_generator.py (urllib fallback exists)

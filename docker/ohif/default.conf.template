@@ -1,0 +1,50 @@
+# OHIF nginx server template for the modern (v3.9+) unprivileged image.
+# docker/ohif/entrypoint.sh fills __ORTHANC_BASIC_AUTH__, then runs
+# envsubst '${PORT}:${PUBLIC_URL}' < this file > /etc/nginx/conf.d/default.conf   — so ${PORT} is filled from the PORT env var,
+# while nginx runtime vars ($uri, $host, ...) are left untouched (not in the
+# envsubst whitelist). Keep the Orthanc reverse-proxy so the browser stays
+# same-origin.
+server {
+  gzip_static  always;
+  gzip_proxied expired no-cache no-store private auth;
+  gunzip       on;
+  listen ${PORT} default_server;
+  listen [::]:${PORT} default_server;
+
+  location / {
+    root   /usr/share/nginx/html;
+    index  index.html index.htm;
+    try_files $uri $uri/ /index.html;
+    add_header Cross-Origin-Resource-Policy same-origin;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+  }
+
+  # ── Orthanc DICOMweb proxy ────────────────────────────────────
+  # Proxies /orthanc/* → http://orthanc:8042/* so the browser sees
+  # same-origin requests instead of cross-origin, avoiding CORS.
+  location /orthanc/ {
+    proxy_pass         http://orthanc:8042/;
+    proxy_set_header   Host              $host;
+    proxy_set_header   X-Real-IP         $remote_addr;
+    proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header   X-Forwarded-Proto $http_x_forwarded_proto;
+
+    # Credentials are added here, server-side (rendered by entrypoint.sh from
+    # docker/.env) — the browser and app-config.js never contain them.
+    proxy_set_header   Authorization "Basic __ORTHANC_BASIC_AUTH__";
+
+    proxy_read_timeout         300;
+    proxy_send_timeout         300;
+    client_max_body_size       2g;
+    proxy_buffering            off;
+    proxy_request_buffering    off;
+  }
+
+  error_page   500 502 503 504  /50x.html;
+  location = /50x.html {
+    root   /usr/share/nginx/html;
+  }
+}

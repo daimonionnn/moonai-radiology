@@ -1,0 +1,73 @@
+# ── Secrets ─────────────────────────────────────────
+docker/.env
+*.env
+!*.env.example
+
+# ── Scratch / accidentally-committed junk ────────────
+datasets/.lock
+# Stray control-character filename accidentally committed (an NVIDIA GPG key blob).
+# Remove from tracking with:  git rm --cached "$(printf '\004')"
+"\004"
+
+# ── Model storage (large binary files) ──────────────
+models/bundles/
+models/triton/
+
+# ── Persistent data & logs ───────────────────────────
+storage/orthanc-db/
+storage/logs/
+storage/tensorboard/
+
+# ── Downloaded MONAI Label apps ──────────────────────
+apps/
+
+# ── Datasets (keep directory structure, ignore data files) ───
+datasets/ct/**
+datasets/mri/**
+datasets/nifti/**
+datasets/pathology/**
+datasets/mammography/**
+datasets/xray/**
+!datasets/ct/.gitkeep
+!datasets/mri/.gitkeep
+!datasets/nifti/.gitkeep
+!datasets/pathology/.gitkeep
+!datasets/mammography/.gitkeep
+!datasets/xray/.gitkeep
+
+# ── Python ───────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+.venv/
+venv/
+env/
+
+# ── Jupyter ──────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── Temp & results ───────────────────────────────────
+results/
+tmp/
+*.tmp
+*.log
+*.zip
+
+# ── OS ───────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Editor ───────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# ── Ad-hoc local scratch scripts ─────────────────────
+test_script*.py

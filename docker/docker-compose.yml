@@ -1,0 +1,213 @@
+# ============================================================
+#  MONAI Medical Imaging Platform — Docker Compose
+# ============================================================
+# Run from the docker/ directory OR from the project root with:
+#   docker compose -f docker/docker-compose.yml --env-file docker/.env up -d
+#
+# Quick start (from project root):
+#   ./scripts/start.sh
+# ============================================================
+
+name: monai-platform
+
+# ── Shared GPU reservation snippet ──────────────────────────
+x-gpu: &gpu
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+  environment:
+    - NVIDIA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-all}
+    - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES:-all}
+
+services:
+
+  # ──────────────────────────────────────────────────────────
+  #  MONAI Label  —  Annotation + Active-Learning Server
+  #  Custom image: CUDA 12.8 + PyTorch 2.6 + monailabel
+  #                + TorchXRayVision (RTG/CXR pathology)
+  #  Swagger UI:  http://localhost:8000/docs
+  # ──────────────────────────────────────────────────────────
+  monailabel:
+    build:
+      context: ./monailabel
+      dockerfile: Dockerfile
+    image: monai-platform/monailabel:latest
+    container_name: monailabel
+    hostname: monailabel
+    # Not "unless-stopped": this holds GPU VRAM, so it should only run when
+    # started deliberately (./scripts/start.sh), not auto-start on PC reboot.
+    restart: "no"
+    <<: *gpu
+    entrypoint: ["/bin/bash", "-c", "python3 /tmp/fix_pydicom.py && exec /entrypoint.sh"]
+    ports:
+      - "${MONAILABEL_PORT:-8000}:8000"
+    volumes:
+      - ./monailabel/fix_pydicom.py:/tmp/fix_pydicom.py:ro
+      - ${HOST_APPS_PATH:-../apps}:/workspace/apps
+      - ${HOST_DATASETS_PATH:-../datasets}:/workspace/datasets
+      - ${HOST_MODELS_PATH:-../models}/bundles:/workspace/bundles
+      - ${HOST_STORAGE_PATH:-../storage}/logs:/workspace/logs
+      - ${HOST_STORAGE_PATH:-../storage}/tensorboard:/workspace/tensorboard
+    environment:
+      - MONAILABEL_APP=${MONAILABEL_APP:-monaibundle}
+      - MONAILABEL_MODELS=${MONAILABEL_MODELS:-brats_mri_segmentation,lung_nodule_ct_detection}
+      - MONAILABEL_STUDIES_MODE=${MONAILABEL_STUDIES_MODE:-local}
+      - MONAILABEL_STUDIES_LOCAL_PATH=${MONAILABEL_STUDIES_LOCAL_PATH:-/workspace/datasets}
+      - MONAILABEL_PRELOAD=${MONAILABEL_PRELOAD:-true}
+      - MONAILABEL_LOG_LEVEL=${MONAILABEL_LOG_LEVEL:-info}
+      # LLM integration
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://localhost:1234}
+      - LLM_MODEL=${LLM_MODEL:-llama-3.1-8b-instruct}
+    ulimits:
+      stack:
+        soft: 33554432
+        hard: 33554432
+    networks:
+      - monai-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  # ──────────────────────────────────────────────────────────
+  #  Orthanc  —  DICOM Server + DICOMweb
+  #  Web UI:    http://localhost:8042
+  #  DICOM AET: MONAI  (port 4242)
+  # ──────────────────────────────────────────────────────────
+  orthanc:
+    image: orthancteam/orthanc:latest
+    container_name: orthanc
+    hostname: orthanc
+    # Don't auto-start on PC reboot; start deliberately via scripts/start.sh.
+    restart: "no"
+    ports:
+      - "${ORTHANC_HTTP_PORT:-8042}:8042"
+      - "${ORTHANC_DICOM_PORT:-4242}:4242"
+    volumes:
+      - ${HOST_STORAGE_PATH:-../storage}/orthanc-db:/var/lib/orthanc/db
+      - ./orthanc/orthanc.json:/etc/orthanc/orthanc.json:ro
+    environment:
+      - VERBOSE_ENABLED=true
+      # Credentials come from docker/.env (git-ignored), never from tracked files.
+      - ORTHANC_USERNAME=${ORTHANC_USERNAME:-admin}
+      - ORTHANC_PASSWORD=${ORTHANC_PASSWORD:-}
+      - 'ORTHANC__REGISTERED_USERS={"${ORTHANC_USERNAME:-admin}": "${ORTHANC_PASSWORD:-}"}'
+    networks:
+      - monai-network
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import os, urllib.request, base64; auth=base64.b64encode(('%s:%s' % (os.environ['ORTHANC_USERNAME'], os.environ['ORTHANC_PASSWORD'])).encode()).decode(); urllib.request.urlopen(urllib.request.Request('http://localhost:8042/', headers={'Authorization': 'Basic '+auth}), timeout=5)"
+      interval: 20s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  # ──────────────────────────────────────────────────────────
+  #  OHIF Viewer  —  Browser-based DICOM Viewer
+  #  Web UI:  http://localhost:3000
+  #  Connects to Orthanc DICOMweb + MONAI Label extension
+  # ──────────────────────────────────────────────────────────
+  ohif:
+    # Modern OHIF (v3.9+) uses an nginx-unprivileged base: runs as user "nginx",
+    # serves on :8080, and generates /etc/nginx/conf.d/default.conf from
+    # /usr/src/default.conf.template via envsubst (${PORT}/${PUBLIC_URL}). So we
+    # provide our Orthanc-proxy config as that TEMPLATE (not as default.conf),
+    # set PORT=8080, and map the host port to 8080.
+    image: ohif/app:v3.11.0
+    container_name: ohif
+    hostname: ohif
+    # Don't auto-start on PC reboot; start deliberately via scripts/start.sh.
+    restart: "no"
+    ports:
+      - "${OHIF_PORT:-3000}:8080"
+    # Our entrypoint renders the nginx config with the Orthanc credentials from
+    # docker/.env, so the browser never sees them (see docker/ohif/entrypoint.sh).
+    entrypoint: ["/bin/sh", "/usr/src/moonai/entrypoint.sh"]
+    command: ["nginx", "-g", "daemon off;"]
+    environment:
+      - PORT=8080
+      - ORTHANC_USERNAME=${ORTHANC_USERNAME:-admin}
+      - ORTHANC_PASSWORD=${ORTHANC_PASSWORD:-}
+    volumes:
+      - ./ohif/app-config.js:/usr/share/nginx/html/app-config.js:ro
+      - ./ohif/default.conf.template:/usr/src/moonai/default.conf.template:ro
+      - ./ohif/entrypoint.sh:/usr/src/moonai/entrypoint.sh:ro
+      # The unprivileged nginx runs as uid "nginx" and writes its pid + temp dirs
+      # under /tmp, but this image ships /tmp as 1755 (not writable by non-root).
+      # Back /tmp with a world-writable (1777) tmpfs so nginx can start.
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 01777
+    networks:
+      - monai-network
+    depends_on:
+      orthanc:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ──────────────────────────────────────────────────────────
+  #  Triton (production model serving) and Holoscan (real-time
+  #  streaming inference) were REMOVED — they are not needed for the
+  #  stored-DICOM / batch radiology workflow and Holoscan required an
+  #  NGC API key. To bring them back for a future production deployment,
+  #  see docs/OPTIONAL_SERVICES.md (contains the exact service blocks,
+  #  ports, and NGC setup).
+  # ──────────────────────────────────────────────────────────
+
+  # ──────────────────────────────────────────────────────────
+  #  TensorBoard  —  Training Monitoring
+  #  Web UI:  http://localhost:6006
+  # ──────────────────────────────────────────────────────────
+  tensorboard:
+    image: monai-platform/monailabel:latest
+    container_name: tensorboard
+    hostname: tensorboard
+    # See monailabel above: don't auto-start on PC reboot.
+    restart: "no"
+    ports:
+      - "${TENSORBOARD_PORT:-6006}:6006"
+    volumes:
+      - ${HOST_STORAGE_PATH:-../storage}/tensorboard:/tensorboard
+    entrypoint: ["/usr/local/bin/tensorboard", "--logdir=/tensorboard", "--host=0.0.0.0", "--port=6006"]
+    networks:
+      - monai-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  monai-network:
+    name: monai-platform
+    driver: bridge

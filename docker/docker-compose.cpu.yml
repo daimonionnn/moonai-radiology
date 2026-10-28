@@ -1,0 +1,151 @@
+# ============================================================
+#  MONAI Platform — CPU-ONLY compose (no NVIDIA GPU required)
+# ============================================================
+# Use this when no NVIDIA GPU is available (e.g. GPU removed / in service).
+# It runs MONAI Label + Orthanc + OHIF WITHOUT any GPU reservation, so the
+# container starts on a plain Docker install with no nvidia-container-toolkit.
+#
+# Inference still works — PyTorch/MONAI automatically fall back to the CPU
+# when torch.cuda.is_available() is False. It is just SLOW: expect a few
+# minutes for small CT organ models and 10-40+ minutes for the large
+# transformer brain model (wholeBrainSeg UNEST). Great for functional
+# testing, not for production throughput.
+#
+# Run:
+#   docker compose -f docker/docker-compose.cpu.yml --env-file docker/.env up -d
+#   docker compose -f docker/docker-compose.cpu.yml logs -f monailabel
+#
+# Notes:
+#   * Triton / Holoscan / TensorBoard are GPU-oriented and intentionally omitted.
+#   * The custom CUDA image still runs fine on CPU. If you don't want to build
+#     it, set image below to the stock  projectmonai/monailabel:latest
+#     (Blackwell/sm_120 does not matter on CPU).
+#   * OMP/MKL thread env vars are tuned for the 18-core host; adjust as needed.
+# ============================================================
+
+name: monai-platform-cpu
+
+services:
+
+  monailabel:
+    build:
+      context: ./monailabel
+      dockerfile: Dockerfile
+    image: monai-platform/monailabel:latest
+    # For a no-build CPU test, comment out build+image above and use:
+    # image: projectmonai/monailabel:latest
+    container_name: monailabel
+    hostname: monailabel
+    # Not "unless-stopped": don't auto-start on PC reboot (see docker-compose.yml).
+    restart: "no"
+    entrypoint: ["/bin/bash", "-c", "python3 /tmp/fix_pydicom.py && exec /entrypoint.sh"]
+    ports:
+      - "${MONAILABEL_PORT:-8000}:8000"
+    volumes:
+      - ./monailabel/fix_pydicom.py:/tmp/fix_pydicom.py:ro
+      - ${HOST_APPS_PATH:-../apps}:/workspace/apps
+      - ${HOST_DATASETS_PATH:-../datasets}:/workspace/datasets
+      - ${HOST_MODELS_PATH:-../models}/bundles:/workspace/bundles
+      - ${HOST_STORAGE_PATH:-../storage}/logs:/workspace/logs
+      - ${HOST_STORAGE_PATH:-../storage}/tensorboard:/workspace/tensorboard
+    environment:
+      # Force CPU: hide any GPU that might appear, and let torch fall back.
+      - CUDA_VISIBLE_DEVICES=""
+      - NVIDIA_VISIBLE_DEVICES=void
+      # Thread tuning for CPU inference (18-core host).
+      - OMP_NUM_THREADS=${OMP_NUM_THREADS:-16}
+      - MKL_NUM_THREADS=${MKL_NUM_THREADS:-16}
+      - MONAILABEL_APP=${MONAILABEL_APP:-monaibundle}
+      - MONAILABEL_MODELS=${MONAILABEL_MODELS:-wholeBody_ct_segmentation}
+      - MONAILABEL_STUDIES_MODE=${MONAILABEL_STUDIES_MODE:-local}
+      - MONAILABEL_STUDIES_LOCAL_PATH=${MONAILABEL_STUDIES_LOCAL_PATH:-/workspace/datasets}
+      # Preloading every model into RAM on a CPU box is heavy — load on demand.
+      - MONAILABEL_PRELOAD=false
+      - MONAILABEL_LOG_LEVEL=${MONAILABEL_LOG_LEVEL:-INFO}
+      - LLM_BASE_URL=${LLM_BASE_URL:-http://127.0.0.1:8081}
+      - LLM_MODEL=${LLM_MODEL:-qwen3}
+    ulimits:
+      stack:
+        soft: 33554432
+        hard: 33554432
+    networks:
+      - monai-network-cpu
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # CPU startup + on-demand model load is slow; give it longer to go healthy.
+      start_period: 180s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  orthanc:
+    image: orthancteam/orthanc:latest
+    container_name: orthanc
+    hostname: orthanc
+    # Don't auto-start on PC reboot; start deliberately via scripts/start.sh.
+    restart: "no"
+    ports:
+      - "${ORTHANC_HTTP_PORT:-8042}:8042"
+      - "${ORTHANC_DICOM_PORT:-4242}:4242"
+    volumes:
+      - ${HOST_STORAGE_PATH:-../storage}/orthanc-db:/var/lib/orthanc/db
+      - ./orthanc/orthanc.json:/etc/orthanc/orthanc.json:ro
+    environment:
+      - VERBOSE_ENABLED=true
+      # Credentials come from docker/.env (git-ignored), never from tracked files.
+      - ORTHANC_USERNAME=${ORTHANC_USERNAME:-admin}
+      - ORTHANC_PASSWORD=${ORTHANC_PASSWORD:-}
+      - 'ORTHANC__REGISTERED_USERS={"${ORTHANC_USERNAME:-admin}": "${ORTHANC_PASSWORD:-}"}'
+    networks:
+      - monai-network-cpu
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  ohif:
+    # Modern OHIF (nginx-unprivileged, serves :8080). See docker-compose.yml for
+    # why we provide the config as a template and back /tmp with a tmpfs.
+    image: ohif/app:v3.11.0
+    container_name: ohif
+    hostname: ohif
+    # Don't auto-start on PC reboot; start deliberately via scripts/start.sh.
+    restart: "no"
+    ports:
+      - "${OHIF_PORT:-3000}:8080"
+    # Our entrypoint renders the nginx config with the Orthanc credentials from
+    # docker/.env, so the browser never sees them (see docker/ohif/entrypoint.sh).
+    entrypoint: ["/bin/sh", "/usr/src/moonai/entrypoint.sh"]
+    command: ["nginx", "-g", "daemon off;"]
+    environment:
+      - PORT=8080
+      - ORTHANC_USERNAME=${ORTHANC_USERNAME:-admin}
+      - ORTHANC_PASSWORD=${ORTHANC_PASSWORD:-}
+    volumes:
+      - ./ohif/app-config.js:/usr/share/nginx/html/app-config.js:ro
+      - ./ohif/default.conf.template:/usr/src/moonai/default.conf.template:ro
+      - ./ohif/entrypoint.sh:/usr/src/moonai/entrypoint.sh:ro
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          mode: 01777
+    networks:
+      - monai-network-cpu
+    depends_on:
+      - orthanc
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  monai-network-cpu:
+    name: monai-platform-cpu
+    driver: bridge

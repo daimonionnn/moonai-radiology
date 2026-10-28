@@ -1,0 +1,72 @@
+{
+  // ============================================================
+  //  Orthanc DICOM Server Configuration
+  //  MONAI Medical Imaging Platform
+  // ============================================================
+
+  "Name" : "MONAI-Platform",
+  "StorageDirectory" : "/var/lib/orthanc/db",
+  "IndexDirectory"   : "/var/lib/orthanc/db",
+
+  // ── Network ─────────────────────────────────────────────────
+  "HttpServerEnabled"   : true,
+  "HttpPort"            : 8042,
+  "DicomServerEnabled"  : true,
+  "DicomPort"           : 4242,
+
+  // Allow connections from MONAI Label and OHIF containers
+  "RemoteAccessAllowed" : true,
+  "AuthenticationEnabled" : true,
+
+  // Users are NOT stored here: docker-compose sets ORTHANC__REGISTERED_USERS
+  // from ORTHANC_USERNAME / ORTHANC_PASSWORD in docker/.env (git-ignored).
+
+  // ── DICOM AET ───────────────────────────────────────────────
+  "DicomAet"           : "MONAI",
+  "DicomCheckCalledAet": false,
+
+  // ── Accepted DICOM modalities ────────────────────────────────
+  // (empty = accept from any)
+  "DicomModalities" : {
+    "SLICER" : [ "3DSLICER", "127.0.0.1", 11112 ]
+  },
+
+  // ── CORS — allow OHIF and MONAI Label to call REST API ───────
+  "HttpServerEnabled"       : true,
+  "HttpDescribeErrors"      : true,
+  "HttpCompressionEnabled"  : true,
+
+  // ── DICOMweb plugin (bundled in orthancteam/orthanc) ─────────
+  "DicomWeb" : {
+    "Enable"               : true,
+    "Root"                 : "/dicom-web/",
+    "EnableWado"           : true,
+    "WadoRoot"             : "/wado",
+    "Ssl"                  : false,
+    "QidoCaseSensitive"    : false,
+    "StudiesMetadata"      : "Full",
+    "SeriesMetadata"       : "Full",
+    "MetadataWorkerThreadsCount" : 4
+  },
+
+  // ── Storage plugins ──────────────────────────────────────────
+  "StorageCompression"          : false,
+  "MaximumStorageSize"          : 0,
+  "MaximumPatientCount"         : 0,
+
+  // ── Misc ─────────────────────────────────────────────────────
+  "OverwriteInstances"          : true,
+  "SaveJobs"                    : true,
+  "MediaArchiveSize"            : 1,
+  "DefaultEncoding"             : "Latin1",
+  "DeidentifyLogs"              : false,
+  "LogExportedResources"        : false,
+  "JobsHistorySize"             : 10,
+  "SynchronousCMoveTimeout"     : 1200,
+  "BucketSize"                  : 0,
+  "Http" : {
+    "Timeout"  : 120,
+    "Proxy"    : "",
+    "CaBundle" : ""
+  }
+}
