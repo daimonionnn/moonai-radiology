@@ -46,17 +46,27 @@ fi
 # ── Sync pre-downloaded bundles into app model dir ───────────
 # download-models.sh puts bundles in /workspace/bundles (host: models/bundles/)
 # MONAI Label's monaibundle app looks in {app_dir}/model/ (hardcoded, no config override)
-# Sync any missing bundles so MONAI Label finds them without re-downloading
+# Copy bundles that are missing OR whose version / configs differ, so an
+# updated bundle in models/bundles/ actually replaces the app's copy — previously only
+# missing ones were copied and updates were silently ignored.
 MODEL_DIR="${APP_DIR}/model"
 mkdir -p "$MODEL_DIR"
+# version + checksum of configs/, so a locally patched config (same version) also syncs
+bundle_version() {
+    [ -d "$1/configs" ] || return 0
+    echo "$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['version'])" "$1/configs/metadata.json" 2>/dev/null)" \
+         "$(cat "$1"/configs/* 2>/dev/null | md5sum | cut -c1-8)"
+}
 if [ -d "/workspace/bundles" ] && [ "$(ls -A /workspace/bundles 2>/dev/null)" ]; then
     echo "[INFO] Syncing bundles: /workspace/bundles → ${MODEL_DIR}"
     for b in /workspace/bundles/*/; do
         name=$(basename "$b")
         target="${MODEL_DIR}/${name}"
-        if [ ! -d "$target" ]; then
+        src_v=$(bundle_version "$b"); dst_v=$(bundle_version "$target")
+        if [ ! -d "$target" ] || [ "$src_v" != "$dst_v" ]; then
+            rm -rf "$target"
             cp -r "$b" "$target"
-            echo "[INFO]   Synced: $name"
+            echo "[INFO]   Synced: $name ${dst_v:+$dst_v → }$src_v"
         fi
     done
 fi

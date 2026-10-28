@@ -30,17 +30,17 @@ for arg in "$@"; do
     [ "$arg" = "--no-cache" ] && NO_CACHE="--no-cache"
 done
 
-info "Building monai-platform/monailabel:latest ..."
+info "Building monai-platform/monailabel:${IMAGE_TAG:-latest} ..."
 info "Base image: nvcr.io/nvidia/cuda:12.8.0-cudnn-devel-ubuntu22.04"
-info "This installs: Python 3.11 (deadsnakes), PyTorch 2.7 (cu128), MONAI Core, MONAI Label, MONAI Deploy, TorchXRayVision"
+info "This installs: Python 3.11 (deadsnakes), PyTorch 2.11 (cu128), MONAI 1.6, MONAI Label, MONAI Deploy, TorchXRayVision"
 
 DOCKER_BUILDKIT=0 docker build \
     ${NO_CACHE} \
-    -t monai-platform/monailabel:latest \
+    -t "monai-platform/monailabel:${IMAGE_TAG:-latest}" \
     -f "${DOCKER_DIR}/monailabel/Dockerfile" \
     "${DOCKER_DIR}/monailabel"
 
-ok "Build complete: monai-platform/monailabel:latest"
-docker image inspect monai-platform/monailabel:latest \
+ok "Build complete: monai-platform/monailabel:${IMAGE_TAG:-latest}"
+docker image inspect "monai-platform/monailabel:${IMAGE_TAG:-latest}" \
     --format '{{.RepoTags}} — Size: {{.Size}}' | \
     awk '{printf "  Image size: %.1f GB\n", $NF/1024/1024/1024}'

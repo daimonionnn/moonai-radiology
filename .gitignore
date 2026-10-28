@@ -11,6 +11,7 @@ datasets/.lock
 
 # ── Model storage (large binary files) ──────────────
 models/bundles/
+models/bundles_*/
 models/triton/
 models/templates/
 models/uls_plus/

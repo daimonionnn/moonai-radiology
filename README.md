@@ -64,7 +64,7 @@ Better and oncology-specific models planned next: [TODO](docs/TODO.md) P1/P2.
 
 - Linux + Docker (Compose v2)
 - **GPU** (recommended): NVIDIA GPU, driver ≥ 570, NVIDIA Container Toolkit; the custom
-  image targets CUDA 12.8 / Blackwell.
+  image targets CUDA 12.8 / Blackwell (Python 3.11, PyTorch 2.11, MONAI 1.6, MONAI Label 0.8.5).
 - **CPU**: no GPU needed — works, just slower (see *CPU mode*).
 - Optional: an OpenAI-compatible LLM server (LM Studio, llama-server, vLLM, Ollama) or a
   cloud API for the report.

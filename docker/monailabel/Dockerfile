@@ -46,19 +46,34 @@ RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
     && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11 \
     && python3.11 -c "import sys; assert sys.version_info.releaselevel == 'final', sys.version"
 
-# ── PyTorch 2.7 — CUDA 12.8 wheels (Blackwell sm_120 support) ──
+# ── PyTorch — CUDA 12.8 wheels (Blackwell sm_120 support) ─────
+# MONAI 1.6 needs torch >= 2.8. 2.11.0+cu128 is the version already verified on the
+# reference GPU in the host venvs (TotalSegmentator, nnInteractive).
+ARG TORCH_VERSION=2.11.0
+ARG TORCHVISION_VERSION=0.26.0
 RUN pip install --no-cache-dir \
-    torch==2.7.0 \
-    torchvision==0.22.0 \
-    torchaudio==2.7.0 \
+    torch==${TORCH_VERSION} \
+    torchvision==${TORCHVISION_VERSION} \
+    torchaudio==${TORCH_VERSION} \
     --index-url https://download.pytorch.org/whl/cu128
 
 # ── MONAI Core (all extras) ──────────────────────────────────
+# MONAI Label 0.8.5 only requires monai>=1.4.0.
+ARG MONAI_VERSION=1.6.1
 # software-properties-common (for the deadsnakes PPA) pulls apt's python3-blinker, which
 # pip cannot uninstall ("distutils installed project") — install ours alongside it.
 RUN pip install --no-cache-dir --ignore-installed blinker \
     && pip install --no-cache-dir \
-    "monai[all]==1.4.0"
+    "monai[all]==${MONAI_VERSION}"
+# monai[all] 1.6 pulls cuCIM for CUDA 13 (cucim-cu13 + cupy-cuda13x + nvimgcodec-cu13),
+# which conflicts with the CUDA 12.8 stack of this image — use the CUDA 12 build instead.
+RUN pip uninstall -y cucim-cu13 cupy-cuda13x nvidia-nvimgcodec-cu13 \
+    && pip install --no-cache-dir cucim-cu12 "nvidia-nvimgcodec-cu12[all]"
+
+# MONAI >= 1.5 Spacingd updates every "<key>_*" entry as a metadata dict, but MONAI Label
+# 0.8.5 adds "image_path" (a string) → every inference failed with
+# "'str' object has no attribute 'update'". Only update entries that are dicts.
+RUN python3 -c "import monai.transforms.spatial.dictionary as d; p = d.__file__; t = open(p).read(); old = 'd[meta_key].update(d[key].meta)'; assert t.count(old) == 1, 'MONAI changed - review this patch'; open(p, 'w').write(t.replace(old, old + ' if isinstance(d[meta_key], dict) else None'))"
 
 # ── MONAI Label ──────────────────────────────────────────────
 RUN pip install --no-cache-dir \
