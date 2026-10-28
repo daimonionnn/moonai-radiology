@@ -50,7 +50,7 @@ slices (0.08 mL on 5 mm slices: Dice 0.35).
 ## Automatic tumour candidates (VISTA3D)
 
 ```bash
-./scripts/oncology/find-tumours.sh --image <ct.nii.gz | DICOM dir> [--classes lung,liver,pancreas,colon,bone]
+./scripts/oncology/find-tumours-vista3d.sh --image <ct.nii.gz | DICOM dir> [--classes lung,liver,pancreas,colon,bone]
 ```
 
 Runs the VISTA3D bundle (in the `monailabel` container) with its tumour classes as the
@@ -60,6 +60,37 @@ connected lesion with volume, extent and centre (RAS, usable as `--point` for
 `summary.json`). On the public cases: lung nodule found (Dice 0.82, 1 false positive),
 liver metastases 4/7 found with no false positives (Dice 0.64). **Candidates only** —
 small lesions on thick slices are missed. There is no kidney-tumour class.
+
+> ⚠ **False positives on normal scans.** On a healthy arterial-phase abdominal CT it
+> reported 5 candidates: a 10.8 mL "colon cancer primary" of soft-tissue density (median
+> 32 HU — probably a collapsed bowel segment or bowel content, *not* oral contrast), two
+> smaller colon candidates, and two tiny "bone lesions" (≤ 0.16 mL, 440–515 HU, dense
+> bone). A real tumour would have similar density, so a simple HU filter cannot remove
+> them. Treat every candidate as a question for the reader, never as a finding.
+
+`--image` must be **one series** folder. A study folder with several series (scout,
+native, arterial, venous) is rejected with a list of its series and their paths.
+
+## Automatic tumour candidates (TotalSegmentator)
+
+```bash
+./scripts/oncology/find-tumours-totalseg.sh --image <ct.nii.gz | DICOM series dir> [--classes lung,liver,kidney]
+```
+
+Same output format as the VISTA3D script (`results/<timestamp>_tumours-totalseg_<name>/`,
+`tumours_mask.nii.gz` with labels 1 lung nodule, 2 liver lesion, 3 kidney cyst, and
+`summary.json`), using TotalSegmentator's tasks `lung_nodules`, `liver_lesions` and
+`kidney_cysts` (cysts only — not solid kidney tumours). Runs on the host
+(TotalSegmentator venv), ~20–40 s per task on the GPU.
+
+| CT | TotalSegmentator | VISTA3D |
+|---|---|---|
+| LIDC-IDRI-0001 (1 lung nodule) | nodule found + 1 false "liver lesion" (0.5 mL) | nodule found + 1 false positive |
+| CRLM-CT-1105 (7 liver metastases) | 7 candidates, 4 of them true | 4 candidates, all true |
+| normal abdominal CT | 2 tiny "liver lesions" (0.24, 0.02 mL) | 5 candidates (colon, bone) |
+
+On the normal CT the two models did not agree on a single candidate — running both and
+trusting mainly what both find is a cheap way to cut false positives (TODO).
 
 ## Interactive segmentation in 3D Slicer (nnInteractive)
 

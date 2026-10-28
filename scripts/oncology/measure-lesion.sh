@@ -62,7 +62,7 @@ CT="$IMAGE"
 if [ -d "$IMAGE" ]; then
     info "Converting DICOM → NIfTI..."
     CT="${OUT}/ct.nii.gz"
-    "$PYBIN" -c "import dicom2nifti,sys; dicom2nifti.dicom_series_to_nifti(sys.argv[1], sys.argv[2], reorient_nifti=True)" "$IMAGE" "$CT"
+    "$PYBIN" "${PROJECT_ROOT}/scripts/lib/dicom_to_nifti.py" "$IMAGE" "$CT" || { rm -rf "${RUN:-$OUT}"; exit 1; }
 fi
 
 info "ULS+ segmentation around ${POINT}..."

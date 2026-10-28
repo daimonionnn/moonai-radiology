@@ -26,6 +26,15 @@ connected components not touching any expert lesion.
 | Liver metastases | VISTA3D `hepatic tumor` (prompted) | **Found 4/7, Dice 0.64**, 9.1 vs 10.1 cm³, **no false positives**. (No kidney-tumour class.) |
 | All 9 lesions (click = point nearest each lesion's centre) | **ULS+** (`scripts/oncology/measure-lesion.sh`) | **9/9 measured, mean Dice 0.71**: lung nodule 0.88 (7.8 vs 7.3 mL), kidney tumour 0.88 (7.4 vs 8.7 mL), liver metastases 0.35–0.82 (lowest for the 0.08 mL lesion on 5 mm slices). |
 
+Specificity check — a **normal** arterial-phase abdominal CT (no tumour; positive oral
+contrast): VISTA3D reported 5 candidates (colon 10.75 / 0.28 / 0.24 mL at 19–32 HU median,
+bone 0.16 / 0.03 mL at 440–515 HU) — all false positives; the colon ones are soft-tissue
+density, not contrast, so an HU threshold would not separate them from real tumours. The public tumour cases alone overstate its precision.
+
+The MONAI Zoo `pancreas_ct_dints_segmentation` on the same normal CT: native phase —
+pancreas 15.6 cm³ (wrong; trained on contrast CT), arterial phase — pancreas 116 cm³ but a
+**false 5.9 cm³ "pancreatic tumour"**.
+
 ## Issues found and fixed
 
 - **Detection boxes were misread.** `lung_nodule_ct_detection` returns boxes as
@@ -41,7 +50,7 @@ connected components not touching any expert lesion.
 
 - ~~VISTA3D did not work~~ **fixed**: the image used Ubuntu 22.04's `python3.11`
   3.11.0rc1 (pre-release, `enum` bug → `pytorch-ignite` crashed). Rebuilt with Python
-  3.11.18 from the deadsnakes PPA; VISTA3D now runs via `scripts/oncology/find-tumours.sh`.
+  3.11.18 from the deadsnakes PPA; VISTA3D now runs via `scripts/oncology/find-tumours-vista3d.sh`.
   Still open: MONAI Label's generic bundle task sends VISTA3D no prompt (`class_vector`),
   so it fails when called through the MONAI Label API / OHIF.
 - **Kidney tumours** have no automatic detector (KiTS23 winner weights are not public); ULS+ measures them when clicked.

@@ -7,7 +7,7 @@
 #  the monailabel container with those classes as the prompt and reports each
 #  connected lesion (volume, axial extent). Complements ULS+ (click-to-measure).
 #
-#  Usage:  ./scripts/oncology/find-tumours.sh --image <ct.nii.gz | DICOM dir> [--classes lung,liver,...]
+#  Usage:  ./scripts/oncology/find-tumours-vista3d.sh --image <ct.nii.gz | DICOM dir> [--classes lung,liver,...]
 #  Classes: lung (23), pancreas (24), liver (26), colon (27), bone (128); default all
 #  Output:  results/<timestamp>_tumours_<name>/  (mask + summary.json)
 # ============================================================
@@ -37,12 +37,17 @@ mkdir -p "$RUN"
 CT="$IMAGE"
 if [ -d "$IMAGE" ]; then
     CT="${RUN}/ct.nii.gz"
-    "$PYBIN" -c "import dicom2nifti,sys; dicom2nifti.dicom_series_to_nifti(sys.argv[1], sys.argv[2], reorient_nifti=True)" "$IMAGE" "$CT"
+    "$PYBIN" "${PROJECT_ROOT}/scripts/lib/dicom_to_nifti.py" "$IMAGE" "$CT" || { rm -rf "${RUN:-$OUT}"; exit 1; }
 fi
-# the container sees the project's results/ and datasets/ only through mounted paths
+# the container sees the project's results/ and datasets/ only through mounted paths;
+# datasets/tmp is the staging area (git-ignored). The container runs as root, so make
+# sure the folder stays owned by the host user.
+STAGE="${PROJECT_ROOT}/datasets/tmp"
+mkdir -p "$STAGE" 2>/dev/null || true
+[ -w "$STAGE" ] || docker exec monailabel chown "$(id -u):$(id -g)" /workspace/datasets/tmp
 case "$CT" in
     "${PROJECT_ROOT}/datasets/"*) CT_IN="/workspace/datasets/${CT#${PROJECT_ROOT}/datasets/}" ;;
-    *) mkdir -p "${PROJECT_ROOT}/datasets/tmp"; cp "$CT" "${PROJECT_ROOT}/datasets/tmp/${NAME}.nii.gz"
+    *) cp "$CT" "${STAGE}/${NAME}.nii.gz"
        CT_IN="/workspace/datasets/tmp/${NAME}.nii.gz" ;;
 esac
 OUT_IN="/workspace/datasets/tmp/vista_${NAME}_$$"
